@@ -249,10 +249,101 @@ button {
   background: #0f4cdb;
 }
 
+.utility-button-liff {
+  width: 100%;
+  margin-top: 14px;
+  background: linear-gradient(135deg, #06c755 0%, #0f8d4c 100%);
+}
+
 .utility-status {
   margin: 12px 0 0;
   color: #41516d;
   font-size: 0.94rem;
+}
+
+.liff-panel {
+  margin-top: 24px;
+  padding: 18px;
+  background: linear-gradient(180deg, #f4fff8 0%, #eef7ff 100%);
+  border: 1px solid rgba(6, 199, 85, 0.14);
+  border-radius: 22px;
+}
+
+.liff-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.liff-panel-title {
+  margin: 0;
+  color: #12305f;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.liff-status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.liff-status-chip.is-ready {
+  color: #0b6946;
+  background: #e2fff1;
+}
+
+.liff-status-chip.is-pending {
+  color: #7f5200;
+  background: #fff3dd;
+}
+
+.liff-message {
+  margin: 14px 0 0;
+  font-size: 0.94rem;
+}
+
+.liff-message-error {
+  color: #9d1b1b;
+}
+
+.liff-message-success {
+  color: #0b6946;
+}
+
+.liff-debug-panel {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(18, 48, 95, 0.08);
+}
+
+.liff-debug-panel div {
+  display: grid;
+  gap: 4px;
+}
+
+.liff-debug-panel dt {
+  color: #61708a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.liff-debug-panel dd {
+  margin: 0;
+  color: #162033;
+  word-break: break-all;
 }
 
 @media (min-width: 900px) {

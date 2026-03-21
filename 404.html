@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redirecting...</title>
+    <script>
+      (function () {
+        var location = window.location;
+        var pathname = location.pathname;
+        var hasFileExtension = /\.[^/]+$/.test(pathname);
+
+        if (!hasFileExtension && !pathname.endsWith('/')) {
+          location.replace(pathname + '/' + location.search + location.hash);
+          return;
+        }
+
+        var segments = pathname.split('/');
+        var repoBase = segments.length > 2 ? '/' + segments[1] + '/' : '/';
+        var routePath = pathname.slice(repoBase.length);
+        var redirectTarget =
+          repoBase +
+          '?p=' +
+          encodeURIComponent(routePath) +
+          (location.search ? '&q=' + encodeURIComponent(location.search.slice(1)) : '') +
+          location.hash;
+
+        location.replace(redirectTarget);
+      })();
+    </script>
+  </head>
+  <body></body>
+  </html>

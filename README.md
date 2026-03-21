@@ -1,6 +1,6 @@
 # line-liff-card
 
-LINE 電子名片靜態站 v1。使用 Vite、React、TypeScript 與本地設定檔產生名片內容，支援 GitHub Pages 部署、QR code、複製網址與 LIFF 預留模式。
+LINE 電子名片靜態站 v1。使用 Vite、React、TypeScript 與本地設定檔產生名片內容，支援 GitHub Pages 部署、QR code、LIFF app 分享、permanent link 與沒有 `VITE_LIFF_ID` 時的 web-preview fallback。
 
 ## Requirements
 
@@ -19,17 +19,33 @@ LINE 電子名片靜態站 v1。使用 Vite、React、TypeScript 與本地設定
 
 主要文案與按鈕設定集中在 `src/content/card.config.ts`。
 
+## LIFF Setup
+
+請建立 `.env.local` 或部署環境變數：
+
+```bash
+VITE_LIFF_ID=YOUR_LIFF_ID
+VITE_SITE_URL=https://<user>.github.io/line-liff-card/
+```
+
+在 LINE Developers Console 建立 LIFF app 後，請把以下資訊填回專案：
+
+- `LIFF ID` -> `VITE_LIFF_ID`
+- `Endpoint URL` -> `VITE_SITE_URL`
+
+`Endpoint URL` 必須指向實際部署頁面根路徑，例如 `https://<user>.github.io/line-liff-card/`。LIFF `init` 與 permanent link 都只會在這個 URL 之下的頁面工作，若開在其他路徑，畫面會顯示防呆錯誤而不是白屏。
+
 ## GitHub Pages
 
 本專案已內建 [`.github/workflows/deploy-pages.yml`](/home/usersun/projects/line-liff-card/.github/workflows/deploy-pages.yml)，每次 push 到 `main` 都會自動：
 
 - `npm ci`
 - `npm test`
-- `npm run build`
+- `npm run smoke:pages`
 - 上傳 `dist`
 - 部署到 GitHub Pages
 
-Vite 會自動依照 GitHub repo 名稱推算 `base`，避免 Pages 子路徑資源載入錯誤；若需要覆蓋，仍可自行指定 `VITE_BASE_PATH`。
+Vite 會自動依照 GitHub repo 名稱推算 `base`，在本 repo 會落到 `/line-liff-card/`，避免 Pages 子路徑 JS/CSS 載入錯誤；若需要覆蓋，仍可自行指定 `VITE_BASE_PATH`。`404.html` 也已內建，GitHub Pages 遇到 `/card/default` 這種沒有副檔名的直達路徑時，會先補成 `/card/default/` 再載入頁面。
 
 ### Enable Pages
 
@@ -43,8 +59,19 @@ Vite 會自動依照 GitHub repo 名稱推算 `base`，避免 Pages 子路徑資
 push 到 `main` 之後：
 
 1. 到 repo 的 `Actions` 頁面確認 `Deploy GitHub Pages` workflow 成功。
-2. 到 `Settings > Pages` 查看 `Your site is live at ...`。
+2. 到 `Settings > Pages` 查看 `Your site is live at ...`，這裡會顯示正式網址。
 3. 直接開啟 Pages 網址確認首頁與 `card/default/` 都能正常載入。
+
+Actions 成功後，最快可從兩個地方找網址：
+
+- repo 的 `Settings > Pages`
+- 成功的 `Deploy GitHub Pages` workflow run 裡的 `deploy` job，`github-pages` environment 會顯示 URL
+
+如果 Pages 白屏，先檢查三件事：
+
+- `Settings > Pages` 的 `Source` 是否為 `GitHub Actions`
+- `Actions` 的 `Run Pages smoke build` 是否成功，且 artifact 來源是 `dist`
+- 頁面網址是否包含 repo base path，例如 `https://<user>.github.io/line-liff-card/`
 
 ### Manual Build Override
 
@@ -54,12 +81,29 @@ push 到 `main` 之後：
 npm run build -- --base=/YOUR_REPO_NAME/
 ```
 
-`index.html` 與 `card/default/index.html` 都是實體頁面，不依賴 server rewrite。`.nojekyll` 會隨 `public/` 一起進到 `dist/`。
+`index.html` 與 `card/default/index.html` 都是實體頁面，不依賴 server rewrite。`.nojekyll` 會隨 `public/` 一起進到 `dist/`，`404.html` 則負責處理 GitHub Pages 的直達路徑 fallback。
 
-## LIFF Ready
+## LIFF Test
 
-若提供 `VITE_LIFF_ID`，介面會自動切換為 `liff-ready` 模式：
+1. 先部署到 GitHub Pages，確認正式網址可開啟。
+2. 在 LINE Developers Console 把 LIFF `Endpoint URL` 設成你的正式網址。
+3. 用 LINE App 開啟 LIFF URL。
+4. 確認畫面顯示 `liff-ready`，並且有 `分享好友` 按鈕。
+5. 點 `分享好友`，應會走 `shareTargetPicker`，送出一張 Flex Message。
+6. 在外部瀏覽器開同一個頁面，應改成顯示 `複製 LIFF 分享連結`。
+
+## Web Fallback Test
+
+不帶 `VITE_LIFF_ID` 仍可直接預覽：
 
 ```bash
-VITE_LIFF_ID=your-liff-id npm run dev
+npm run dev
 ```
+
+帶入 `VITE_LIFF_ID` 也可在外部瀏覽器測試 fallback：
+
+```bash
+VITE_LIFF_ID=your-liff-id VITE_SITE_URL=https://<user>.github.io/line-liff-card/ npm run dev
+```
+
+如果只是在一般瀏覽器本機開發，UI 會保留完整卡片與 QR 功能，不會因為沒有 `LIFF_ID` 而白屏。

@@ -1,7 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { restorePagesLocation } from './lib/pages-fallback';
 import './styles.css';
+
+restorePagesLocation(window);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

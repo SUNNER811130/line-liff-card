@@ -9,6 +9,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
+        notFound: resolve(__dirname, '404.html'),
         main: resolve(__dirname, 'index.html'),
         cardDefault: resolve(__dirname, 'card/default/index.html'),
       },

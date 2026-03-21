@@ -12,11 +12,42 @@ export type ShareResult = {
 
 const SHARE_INTENT_PARAM = 'intent';
 const SHARE_INTENT_ID_PARAM = 'intentId';
+const SHARE_SOURCE_PARAM = 'source';
 const SHARE_INTENT_VALUE = 'share';
+const SHARE_SOURCE_PAGE_SHARE = 'page-share';
+const SHARE_SOURCE_FLEX_FORWARD = 'flex-forward';
 const SHARE_INTENT_PENDING_KEY = 'line-liff-card:share-intent:pending';
 const SHARE_INTENT_LOGIN_KEY = 'line-liff-card:share-intent:login-requested';
+export const FLEX_FORWARD_SHARE_LABEL = '分享這張電子名片';
 
-const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string) => ({
+const createShareIntentId = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+export const getCanonicalLiffShareUrl = (slug: string): string => getCardLiffUrl(slug);
+
+const buildShareIntentUrl = (slug: string, source: string, intentId?: string): string => {
+  const liffUrl = getCanonicalLiffShareUrl(slug);
+  if (!liffUrl) {
+    return '';
+  }
+
+  const targetUrl = new URL(liffUrl);
+  targetUrl.searchParams.set(SHARE_INTENT_PARAM, SHARE_INTENT_VALUE);
+  targetUrl.searchParams.set(SHARE_SOURCE_PARAM, source);
+
+  if (intentId) {
+    targetUrl.searchParams.set(SHARE_INTENT_ID_PARAM, intentId);
+  }
+
+  return targetUrl.toString();
+};
+
+export const buildFlexForwardShareUrl = (slug: string): string =>
+  buildShareIntentUrl(slug, SHARE_SOURCE_FLEX_FORWARD);
+
+export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string) => ({
   type: 'flex' as const,
   altText: `${config.content.fullName}｜${config.content.brandName}`,
   contents: {
@@ -91,6 +122,16 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string)
             uri: resolveActionUrl(config.actions[1]?.url ?? '', pageUrl),
           },
         },
+        {
+          type: 'button' as const,
+          style: 'link' as const,
+          height: 'sm' as const,
+          action: {
+            type: 'uri' as const,
+            label: FLEX_FORWARD_SHARE_LABEL,
+            uri: buildFlexForwardShareUrl(config.slug),
+          },
+        },
       ],
     },
   },
@@ -101,6 +142,20 @@ const buildLineShareUrl = (config: CardConfig, pageUrl: string) =>
 
 const canUseSessionStorage = () => typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
 
+const bootstrapExternalShareIntent = (source: string | null): { active: false } | { active: true; intentId: string } => {
+  if (source !== SHARE_SOURCE_FLEX_FORWARD) {
+    return { active: false };
+  }
+
+  const intentId = createShareIntentId();
+  setPendingShareIntent(intentId);
+  updateShareIntentUrl((currentUrl) => {
+    currentUrl.searchParams.set(SHARE_INTENT_ID_PARAM, intentId);
+  });
+
+  return { active: true, intentId };
+};
+
 const readShareIntentFromUrl = (): { active: false } | { active: true; intentId: string } => {
   if (typeof window === 'undefined') {
     return { active: false };
@@ -109,9 +164,14 @@ const readShareIntentFromUrl = (): { active: false } | { active: true; intentId:
   const currentUrl = new URL(window.location.href);
   const intent = currentUrl.searchParams.get(SHARE_INTENT_PARAM);
   const intentId = currentUrl.searchParams.get(SHARE_INTENT_ID_PARAM);
+  const source = currentUrl.searchParams.get(SHARE_SOURCE_PARAM);
 
-  if (intent !== SHARE_INTENT_VALUE || !intentId) {
+  if (intent !== SHARE_INTENT_VALUE) {
     return { active: false };
+  }
+
+  if (!intentId) {
+    return bootstrapExternalShareIntent(source);
   }
 
   return { active: true, intentId };
@@ -169,6 +229,7 @@ export const clearShareIntent = () => {
   updateShareIntentUrl((currentUrl) => {
     currentUrl.searchParams.delete(SHARE_INTENT_PARAM);
     currentUrl.searchParams.delete(SHARE_INTENT_ID_PARAM);
+    currentUrl.searchParams.delete(SHARE_SOURCE_PARAM);
   });
 };
 
@@ -195,21 +256,9 @@ export const markShareIntentLoginRequested = (intentId: string) => {
 };
 
 export const buildLiffShareIntentUrl = (slug: string): string => {
-  const liffUrl = getCardLiffUrl(slug);
-  if (!liffUrl) {
-    return '';
-  }
-
-  const intentId =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const intentId = createShareIntentId();
   setPendingShareIntent(intentId);
-
-  const targetUrl = new URL(liffUrl);
-  targetUrl.searchParams.set(SHARE_INTENT_PARAM, SHARE_INTENT_VALUE);
-  targetUrl.searchParams.set(SHARE_INTENT_ID_PARAM, intentId);
-  return targetUrl.toString();
+  return buildShareIntentUrl(slug, SHARE_SOURCE_PAGE_SHARE, intentId);
 };
 
 const copyShareUrl = async (pageUrl: string): Promise<ShareResult> => {

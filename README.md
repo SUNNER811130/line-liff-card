@@ -38,6 +38,11 @@
 
 第三顆按鈕固定是系統分享按鈕，不屬於 `config.actions`，也不能在 admin 中刪除。
 
+LINE 對話中的 Flex 電子名片 footer 現在也有第 3 顆固定按鈕：
+
+- label: `分享這張電子名片`
+- action: 開啟 canonical LIFF share 入口，再自動觸發既有 `shareTargetPicker`
+
 實際分享流程：
 
 1. 若目前在 LINE app 內，且 LIFF `shareTargetPicker` 可用：
@@ -45,7 +50,11 @@
 2. 若目前在 LINE app 內，但還沒進入可直接分享的 LIFF 狀態：
    - 會先轉到對應的 LIFF URL，附帶一次性的 `?intent=share&intentId=...`
    - LIFF 初始化成功後會自動再試一次 `shareTargetPicker`
-3. 若完全不在 LINE app 內：
+3. 若收件人是在 LINE 對話中點 Flex 卡片 footer 的 `分享這張電子名片`：
+   - Flex button 只能用 URI action，不能在聊天氣泡內直接執行 JS
+   - 因此會先開 canonical LIFF card route，附帶 `?intent=share&source=flex-forward`
+   - LIFF 頁面接手後會補上一次性 `intentId`，再沿用同一套 auto-share guard 與 `shareTargetPicker`
+4. 若完全不在 LINE app 內：
    - 退回一般 Web Share、LINE 文字分享頁或複製連結
    - 這些 fallback 不保證會是 LINE Flex 電子名片
 
@@ -82,6 +91,7 @@ VITE_SITE_URL=https://sunner811130.github.io/line-liff-card/
 - `VITE_SITE_URL` 應設定為專案根路徑，不要只指向單一卡頁
 - 這樣 `/`、`/card/default/`、`/card/demo-consultant/`、`/admin/` 都在同一個 LIFF Endpoint 範圍內
 - `getCardLiffUrl('demo-consultant')` 會自動收斂到正式 `default` LIFF 分享入口
+- canonical share 入口是 `getCardLiffUrl(slug)` 收斂後的 `https://liff.line.me/<LIFF_ID>/card/default/`
 
 LIFF URL 與公開網址的關係：
 
@@ -136,4 +146,5 @@ LIFF URL 與公開網址的關係：
 
 1. 在 LINE app 內從上述正式頁按第三顆分享，會優先嘗試 LINE Flex 電子名片
 2. `demo-consultant` 分享出去仍是正式 `default` 卡內容
-3. 不在 LINE app 內時，fallback 訊息明確表示可能只會分享網址
+3. 從收到的 Flex 卡片點 `分享這張電子名片`，也應回到 canonical `default` LIFF share 入口
+4. 不在 LINE app 內時，fallback 訊息明確表示可能只會分享網址

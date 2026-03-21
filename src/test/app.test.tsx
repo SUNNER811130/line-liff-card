@@ -200,7 +200,9 @@ describe('App', () => {
 
     expect(shareSpy).not.toHaveBeenCalled();
     expect(runtime.navigateToUrl).toHaveBeenCalledWith(
-      expect.stringMatching(/^https:\/\/liff\.line\.me\/test-liff-id\/card\/default\/\?intent=share&intentId=/),
+      expect.stringMatching(
+        /^https:\/\/liff\.line\.me\/test-liff-id\/card\/default\/\?intent=share&source=page-share&intentId=/,
+      ),
     );
   });
 
@@ -218,6 +220,26 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(liffCoreMock.shareTargetPicker).toHaveBeenCalled();
+      expect(screen.getByText('已開啟 LINE 分享視窗。')).toBeInTheDocument();
+    });
+
+    expect(window.location.search).toBe('');
+    expect(window.sessionStorage.getItem('line-liff-card:share-intent:pending')).toBeNull();
+  });
+
+  it('auto-shares once when a recipient opens the flex forward-share LIFF entry', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/`);
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    liffCoreMock.isApiAvailable.mockReturnValue(true);
+    liffCoreMock.shareTargetPicker.mockResolvedValue(true);
+    window.history.replaceState({}, '', '/card/default/?intent=share&source=flex-forward');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(liffCoreMock.shareTargetPicker).toHaveBeenCalledTimes(1);
       expect(screen.getByText('已開啟 LINE 分享視窗。')).toBeInTheDocument();
     });
 
@@ -260,7 +282,9 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: '分享此電子名片給 LINE 好友' }));
 
     expect(runtime.navigateToUrl).toHaveBeenCalledWith(
-      expect.stringMatching(/^https:\/\/liff\.line\.me\/test-liff-id\/card\/default\/\?intent=share&intentId=/),
+      expect.stringMatching(
+        /^https:\/\/liff\.line\.me\/test-liff-id\/card\/default\/\?intent=share&source=page-share&intentId=/,
+      ),
     );
   });
 });

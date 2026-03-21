@@ -7,6 +7,7 @@
 ## 目前真正重要的產品規則
 
 - 第三顆按鈕固定是系統分享按鈕，不能被內容設定刪除或改成一般連結
+- LINE 對話中的 Flex footer 也有固定第 3 顆轉傳按鈕 `分享這張電子名片`
 - 正式卡只有 `default`
 - `demo-consultant` 只是 legacy slug，相容入口，不是獨立卡
 - legacy slug 分享出去也必須是正式 `default` 卡內容
@@ -20,7 +21,11 @@
 2. 在 LINE app 內，但目前頁面還不是可直接分享的狀態
    - 第三顆按鈕先轉去 `https://liff.line.me/<LIFF_ID>/card/default/?intent=share&intentId=...`
    - LIFF 初始化成功後自動再試一次分享
-3. 完全不在 LINE app 內
+3. 收件人從 LINE 對話中的 Flex footer 點 `分享這張電子名片`
+   - Flex button 只能是 URI action，不能直接在聊天氣泡執行 JS
+   - 因此會先開 `https://liff.line.me/<LIFF_ID>/card/default/?intent=share&source=flex-forward`
+   - LIFF 頁面會補上一次性 `intentId`，再沿用相同的 auto-share guard 與 `shareTargetPicker`
+4. 完全不在 LINE app 內
    - fallback 到 Web Share、LINE 文字分享頁或 copy link
    - 這些 fallback 不保證是 Flex 卡片
 
@@ -37,6 +42,7 @@
 - 不要再指向 `/card/default/`
 - 這樣首頁、正式卡、legacy slug、admin 都在同一個 LIFF Endpoint URL 範圍內
 - `getCardLiffUrl('demo-consultant')` 會 canonicalize 成 `default`
+- canonical share 入口就是 `getCardLiffUrl(slug)` 收斂後的 `https://liff.line.me/<LIFF_ID>/card/default/`
 
 ## 關鍵檔案
 

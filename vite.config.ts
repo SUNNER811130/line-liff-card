@@ -18,6 +18,7 @@ export default defineConfig({
       input: {
         notFound: resolve(__dirname, '404.html'),
         main: resolve(__dirname, 'index.html'),
+        admin: resolve(__dirname, 'admin', 'index.html'),
         ...cardEntries,
       },
     },

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import QRCode from 'qrcode';
 import type { CardConfig } from '../content/cards/types';
 import { buildCardPageViewModel } from '../content/cards/view-model';
@@ -6,7 +6,12 @@ import { ensureLogin, getConfiguredLiffId, initLiff, isInClient, isLoggedIn, isS
 import { toAssetUrl } from '../lib/runtime';
 import { getCardWebUrl } from '../lib/routes';
 import { applySeo } from '../lib/seo';
-import { shareDigitalCard } from '../lib/share';
+import {
+  clearShareIntent,
+  getActiveShareIntent,
+  markShareIntentLoginRequested,
+  shareDigitalCard,
+} from '../lib/share';
 
 type CardPageProps = {
   config: CardConfig;
@@ -30,6 +35,7 @@ export function CardPage({ config, previewMode = false, embedded = false }: Card
   const [loggedIn, setLoggedIn] = useState(false);
   const [shareAvailable, setShareAvailable] = useState(false);
   const [liffInitError, setLiffInitError] = useState<string | null>(null);
+  const autoShareTriggeredRef = useRef(false);
   const liffEnabled = Boolean(getConfiguredLiffId());
   const pageUrl = getCardWebUrl(config.slug);
 
@@ -111,10 +117,73 @@ export function CardPage({ config, previewMode = false, embedded = false }: Card
     };
   }, [config.modules.showQrCode, pageUrl]);
 
+  useEffect(() => {
+    if (previewMode) {
+      return;
+    }
+
+    const shareIntent = getActiveShareIntent();
+    if (!shareIntent.active || autoShareTriggeredRef.current) {
+      return;
+    }
+
+    if (liffInitError) {
+      clearShareIntent();
+      setShareError(liffInitError);
+      return;
+    }
+
+    if (!liffReady) {
+      return;
+    }
+
+    if (!inClient) {
+      clearShareIntent();
+      setShareError('目前不在可直接分享的 LINE LIFF 容器中，這次無法自動送出 LINE Flex 電子名片。');
+      return;
+    }
+
+    if (!loggedIn) {
+      if (!shareIntent.loginRequested) {
+        markShareIntentLoginRequested(shareIntent.intentId);
+        void ensureLogin();
+      }
+      return;
+    }
+
+    if (!shareAvailable) {
+      clearShareIntent();
+      setShareError('目前 LINE 容器不支援 shareTargetPicker，無法自動送出 LINE Flex 電子名片。');
+      return;
+    }
+
+    autoShareTriggeredRef.current = true;
+    setIsSharing(true);
+    setShareMessage(null);
+    setShareError(null);
+
+    void shareDigitalCard({
+      config,
+      pageUrl,
+      inClient,
+      shareAvailable,
+    })
+      .then((result) => {
+        setShareMessage(result.message);
+      })
+      .catch((error) => {
+        setShareError(error instanceof Error ? error.message : '目前無法分享電子名片，請稍後再試。');
+      })
+      .finally(() => {
+        clearShareIntent();
+        setIsSharing(false);
+      });
+  }, [autoShareTriggeredRef, config, inClient, liffInitError, liffReady, loggedIn, pageUrl, previewMode, shareAvailable]);
+
   const handleShare = async () => {
     if (previewMode) {
       setShareError(null);
-      setShareMessage('目前為管理頁預覽，分享按鈕規則已保留，實際分享請回正式名片頁測試。');
+      setShareMessage('目前為管理頁預覽；第三顆按鈕規則與正式頁一致，但不會真的送出分享。正式頁會優先嘗試 LINE Flex 電子名片分享。');
       return;
     }
 

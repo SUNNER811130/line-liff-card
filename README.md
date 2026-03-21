@@ -1,6 +1,6 @@
 # line-liff-card
 
-多名片版本的 LINE 電子名片靜態站。使用 Vite、React、TypeScript 與本地設定檔管理多張名片，支援 GitHub Pages、多 slug 路由、LIFF 分享、permanent link、QR code 與外部瀏覽器 fallback。
+以 Vite、React、TypeScript 建立的 LINE 電子名片靜態站。現在已收斂為單一正式卡片 `default`、legacy slug `demo-consultant`、以及可直接在 GitHub Pages 開啟的 `/admin/` 管理頁 MVP。
 
 ## Requirements
 
@@ -14,59 +14,59 @@
 - `npm run preview`
 - `npm run test`
 - `npm run lint`
+- `npm run smoke:pages`
 
 ## Routes
 
 - `/`
-  - 名片列表首頁
+  - 直接顯示正式卡內容
 - `/card/default/`
-  - 預設商務名片
+  - 正式卡 canonical URL
 - `/card/demo-consultant/`
-  - 顧問示範名片
-- `/card/:slug/`
-  - 任一獨立名片頁
+  - legacy slug，相容入口；實際顯示與分享的都是正式 `default` 卡
+- `/admin/`
+  - 管理頁 MVP
 
-若 slug 不存在，會顯示 404 / fallback 畫面並提供返回首頁與預設名片入口。
+正式站 URL：
 
-## Multi-Card Content
+- `https://sunner811130.github.io/line-liff-card/`
+- `https://sunner811130.github.io/line-liff-card/card/default/`
+- `https://sunner811130.github.io/line-liff-card/card/demo-consultant/`
+- `https://sunner811130.github.io/line-liff-card/admin/`
 
-多名片內容來源集中在：
+## Share Behavior
 
-- `src/content/cards/index.ts`
-  - 管理 card collection 與 slug lookup
+第三顆按鈕固定是系統分享按鈕，不屬於 `config.actions`，也不能在 admin 中刪除。
+
+實際分享流程：
+
+1. 若目前在 LINE app 內，且 LIFF `shareTargetPicker` 可用：
+   - 直接送出同一張 LINE Flex 電子名片
+2. 若目前在 LINE app 內，但還沒進入可直接分享的 LIFF 狀態：
+   - 會先轉到對應的 LIFF URL，附帶一次性的 `?intent=share&intentId=...`
+   - LIFF 初始化成功後會自動再試一次 `shareTargetPicker`
+3. 若完全不在 LINE app 內：
+   - 退回一般 Web Share、LINE 文字分享頁或複製連結
+   - 這些 fallback 不保證會是 LINE Flex 電子名片
+
+重點差異：
+
+- 按第三顆分享按鈕：優先嘗試 LINE Flex 電子名片流程
+- 手動複製網址貼出去：通常只會是網址，不是 Flex 卡片
+
+## Content Source
+
+正式卡資料集中在：
+
 - `src/content/cards/default.ts`
-  - `default` 名片設定
-- `src/content/cards/demo-consultant.ts`
-  - `demo-consultant` 名片設定
-- `src/content/cards/types.ts`
-  - 共用型別
-
-首頁列表與卡片 slug 路由在：
-
-- `src/App.tsx`
-- `src/lib/routes.ts`
-
-## Add A New Card
-
-之後要新增一張卡，最少只要改這 2~3 個檔案：
-
-1. 新增 `src/content/cards/<new-slug>.ts`
-2. 更新 `src/content/cards/index.ts`
-3. 新增 `card/<new-slug>/index.html`
-
-其中：
-
-- `src/content/cards/<new-slug>.ts`
-  - 寫該張名片的文案、連結、圖片與 SEO
 - `src/content/cards/index.ts`
-  - 把新卡加入 collection
-- `card/<new-slug>/index.html`
-  - 讓 GitHub Pages / Vite build 輸出對應的實體頁入口
 
-## Images
+目前只有一張正式卡：
 
-- 主視覺與 OG 圖目前放在 `public/images/`
-- 若要換圖，可把檔案放到 `public/images/`，再更新對應卡片設定中的 `heroImage` 與 `seo.ogImage`
+- slug: `default`
+- legacy slug: `demo-consultant`
+
+`demo-consultant` 只是相容入口，不再有獨立內容檔。
 
 ## LIFF Setup
 
@@ -74,69 +74,66 @@
 
 ```bash
 VITE_LIFF_ID=YOUR_LIFF_ID
-VITE_SITE_URL=https://<user>.github.io/line-liff-card/card/default/
+VITE_SITE_URL=https://sunner811130.github.io/line-liff-card/
 ```
 
-若你要讓特定卡作為 LIFF 正式入口，`VITE_SITE_URL` 應指向該張卡的正式 URL，例如：
+重要原則：
 
-- `https://<user>.github.io/line-liff-card/card/default/`
-- `https://<user>.github.io/line-liff-card/card/demo-consultant/`
+- `VITE_SITE_URL` 應設定為專案根路徑，不要只指向單一卡頁
+- 這樣 `/`、`/card/default/`、`/card/demo-consultant/`、`/admin/` 都在同一個 LIFF Endpoint 範圍內
+- `getCardLiffUrl('demo-consultant')` 會自動收斂到正式 `default` LIFF 分享入口
 
-`Endpoint URL` 必須指向實際部署頁面根路徑。LIFF `init` 與 permanent link 只會在該 URL 範圍之下成功。
+LIFF URL 與公開網址的關係：
 
-### Why LIFF URL And github.io Behave Differently
+- `https://liff.line.me/<LIFF_ID>` 或 `https://liff.line.me/<LIFF_ID>/card/default/`
+  - 進入 LIFF 分享流程
+- `https://sunner811130.github.io/line-liff-card/card/default/`
+  - 公開正式頁
+- 從公開正式頁在 LINE app 內按第三顆分享
+  - 會優先 handoff 到 LIFF，再自動嘗試分享同一張 Flex 卡
 
-- `https://liff.line.me/<LIFF_ID>` 是 LINE 管理的 LIFF 入口，會先帶你進入符合 Endpoint URL 範圍的正式頁面。
-- `https://<user>.github.io/line-liff-card/card/<slug>/` 是公開網頁網址，可直接對外展示。
-- 若目前網址不在 `VITE_SITE_URL` 指定的 Endpoint 範圍內，專案會退回公開頁 fallback，而不是硬做失敗的 LIFF 初始化。
+## Admin MVP
 
-### Mode Badge Meanings
+管理頁入口：
 
-- `LIFF-READY`
-  - 已設定 `VITE_LIFF_ID`
-  - 目前頁面位於正確 Endpoint URL 範圍
-  - 但目前不在 LINE client 內
-- `IN-LIFF`
-  - 已在 LINE client 內成功初始化
-  - 但目前容器 / 版本不支援 `shareTargetPicker`
-- `SHARE-AVAILABLE`
-  - 已在 LINE client 內成功初始化
-  - 且 `isApiAvailable('shareTargetPicker') === true`
+- `https://sunner811130.github.io/line-liff-card/admin/`
 
-## Optional LINE Personalization
+這一版可做：
 
-目前專案已支援在 LIFF 內顯示可選的 LINE 個人化資訊：
+- 編輯卡片內容與前兩顆一般按鈕
+- 保留第三顆固定分享按鈕規則
+- 即時預覽正式卡版型
+- 匯入 / 匯出 JSON
+- 將草稿暫存於瀏覽器 `localStorage`
 
-- LINE 暱稱
-- 頭像
+這一版不能做：
 
-要完整啟用，LINE Developers Console 至少需要確認：
-
-- `profile`
-  - 用於讀取 `liff.getProfile()`
-- `openid`
-  - 建議一併開啟，讓登入與基本身分授權流程較完整
-
-若使用者未授權、scope 未開啟，或目前不是可讀取 profile 的 LIFF 情境，頁面只會顯示簡潔提示，不會報錯或中斷分享流程。
+- 直接寫回 repo 或 GitHub Pages
+- 遠端持久化存檔
+- 權限管理 / 多人協作
 
 ## GitHub Pages
 
-本專案已內建 [`.github/workflows/deploy-pages.yml`](/home/usersun/projects/line-liff-card/.github/workflows/deploy-pages.yml)，每次 push 到 `main` 都會自動：
+本專案已提供：
 
-- `npm ci`
-- `npm test`
-- `npm run smoke:pages`
-- 上傳 `dist`
-- 部署到 GitHub Pages
+- `404.html` route restore
+- `card/default/index.html`
+- `card/demo-consultant/index.html`
+- `admin/index.html`
 
-`404.html` 已內建 GitHub Pages fallback，像 `/card/demo-consultant` 這類無副檔名直達路徑會被導回正確頁面。
+因此 GitHub Pages 可以直接開啟 `/admin/`、`/card/default/`、`/card/demo-consultant/`，也能處理 SPA fallback。
 
 ## Verify Deployment
 
-push 到 `main` 之後，至少確認：
+部署後至少確認：
 
-1. 首頁 `/`
+1. `/`
 2. `/card/default/`
 3. `/card/demo-consultant/`
+4. `/admin/`
 
-都能正常載入。
+以及：
+
+1. 在 LINE app 內從上述正式頁按第三顆分享，會優先嘗試 LINE Flex 電子名片
+2. `demo-consultant` 分享出去仍是正式 `default` 卡內容
+3. 不在 LINE app 內時，fallback 訊息明確表示可能只會分享網址

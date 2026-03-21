@@ -1,3 +1,5 @@
+import { defaultCardSlug, getCardBySlug } from '../content/cards';
+
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, '');
 
 const normalizeBasePath = (basePath: string): string => {
@@ -14,13 +16,21 @@ const getPathSegments = (pathname: string, basePath: string): string[] => {
   return trimSlashes(trimmedPathname).split('/').filter(Boolean);
 };
 
+export const getCanonicalCardSlug = (slug: string): string => {
+  const trimmedSlug = trimSlashes(slug);
+  return getCardBySlug(trimmedSlug)?.slug ?? (trimmedSlug || defaultCardSlug);
+};
+
 export const getCardPath = (slug: string, basePath: string = import.meta.env.BASE_URL): string => {
   const normalizedBasePath = normalizeBasePath(basePath);
-  return `${normalizedBasePath}card/${trimSlashes(slug)}/`;
+  return `${normalizedBasePath}card/${getCanonicalCardSlug(slug)}/`;
 };
 
 export const getAppHomePath = (basePath: string = import.meta.env.BASE_URL): string =>
   normalizeBasePath(basePath);
+
+export const getAdminPath = (basePath: string = import.meta.env.BASE_URL): string =>
+  `${normalizeBasePath(basePath)}admin/`;
 
 const getSiteOrigin = (): string => {
   if (typeof window !== 'undefined') {
@@ -43,7 +53,7 @@ export const getCardLiffUrl = (slug: string, liffId = import.meta.env.VITE_LIFF_
     return '';
   }
 
-  return `https://liff.line.me/${liffId}/card/${trimSlashes(slug)}/`;
+  return `https://liff.line.me/${liffId}/card/${getCanonicalCardSlug(slug)}/`;
 };
 
 export const getCardShareUrl = (slug: string): string => getCardLiffUrl(slug) || getCardWebUrl(slug);

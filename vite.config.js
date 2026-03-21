@@ -22,7 +22,7 @@ export default defineConfig({
     base: resolveBasePath(),
     build: {
         rollupOptions: {
-            input: __assign({ notFound: resolve(__dirname, '404.html'), main: resolve(__dirname, 'index.html') }, cardEntries),
+            input: __assign({ notFound: resolve(__dirname, '404.html'), main: resolve(__dirname, 'index.html'), admin: resolve(__dirname, 'admin', 'index.html') }, cardEntries),
         },
     },
 });

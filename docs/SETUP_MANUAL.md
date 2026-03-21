@@ -12,13 +12,12 @@ npm install
 npm run dev
 ```
 
-## 3. Multi-Card Structure
+## 3. Current Structure
 
-目前多名片資料來源：
+目前正式卡資料來源：
 
 - `src/content/cards/index.ts`
 - `src/content/cards/default.ts`
-- `src/content/cards/demo-consultant.ts`
 - `src/content/cards/types.ts`
 
 路由層：
@@ -26,9 +25,16 @@ npm run dev
 - `/`
 - `/card/default/`
 - `/card/demo-consultant/`
+- `/admin/`
 - `/card/:slug/`
 
-首頁列表與 slug 路由在：
+補充：
+
+- `/` 直接顯示正式卡
+- `/card/demo-consultant/` 是 legacy slug，會映射回正式 `default` 卡
+- `/admin/` 是管理頁 MVP
+
+首頁與 slug 路由在：
 
 - `src/App.tsx`
 - `src/lib/routes.ts`
@@ -47,20 +53,17 @@ npm run dev
 
 ```bash
 VITE_LIFF_ID=YOUR_LIFF_ID
-VITE_SITE_URL=https://<user>.github.io/line-liff-card/card/default/
+VITE_SITE_URL=https://sunner811130.github.io/line-liff-card/
 ```
 
-如果要把另一張卡當成正式入口，就把 `VITE_SITE_URL` 改成對應 slug，例如：
-
-```bash
-VITE_SITE_URL=https://<user>.github.io/line-liff-card/card/demo-consultant/
-```
+`VITE_SITE_URL` 應該指向 repo root，不要只設成單一卡頁。這樣首頁、正式卡、legacy slug 與 `/admin/` 才都在同一個 LIFF Endpoint 範圍內。
 
 ## 6. Why LIFF URL And GitHub Pages URL Behave Differently
 
 - `https://liff.line.me/<LIFF_ID>` 會帶入 LINE 的 LIFF 上下文
 - `https://<user>.github.io/line-liff-card/card/<slug>/` 是公開展示網址
 - 只有當目前頁面位於 `VITE_SITE_URL` 指定的 Endpoint URL 範圍內時，LIFF `init()` 與 permanent link 才會成功
+- 若從公開正式頁在 LINE app 內按第三顆分享，專案會優先 handoff 到 LIFF，再自動嘗試分享同一張 Flex 電子名片
 
 ## 6.1 LINE Profile Personalization
 
@@ -83,6 +86,7 @@ npm run build
 build 後至少要確認：
 
 - `dist/index.html`
+- `dist/admin/index.html`
 - `dist/card/default/index.html`
 - `dist/card/demo-consultant/index.html`
 - `dist/404.html`
@@ -95,10 +99,12 @@ npm test
 
 目前測試已包含：
 
-- 不同 slug 顯示不同內容
+- `/`、`/card/default/`、`/card/demo-consultant/`、`/admin/` 路由
+- legacy slug 映射正式卡
 - 錯誤 slug 顯示 fallback
 - GitHub Pages fallback route restore
 - LIFF runtime / permanent link fallback
+- LIFF share intent handoff 與 auto-share
 
 ## 9. Images
 

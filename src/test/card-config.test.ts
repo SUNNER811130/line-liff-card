@@ -1,5 +1,5 @@
 import { cards, getCardBySlug } from '../content/cards';
-import { getCardLiffUrl, getCardShareUrl, getCardWebUrl } from '../lib/routes';
+import { getAdminPath, getCardLiffUrl, getCardShareUrl, getCardWebUrl, resolveAppRoute } from '../lib/routes';
 import { buildCardActionItems } from '../lib/card-actions';
 
 describe('card collection', () => {
@@ -34,7 +34,16 @@ describe('card collection', () => {
   it('builds card-specific web, liff, and share urls', () => {
     expect(getCardWebUrl('default')).toContain('/card/default/');
     expect(getCardLiffUrl('default', 'test-liff-id')).toBe('https://liff.line.me/test-liff-id/card/default/');
+    expect(getCardLiffUrl('demo-consultant', 'test-liff-id')).toBe('https://liff.line.me/test-liff-id/card/default/');
     expect(getCardShareUrl('default')).toContain('/card/default/');
+  });
+
+  it('resolves home, card, legacy card, and admin routes correctly', () => {
+    expect(resolveAppRoute('/')).toEqual({ kind: 'home' });
+    expect(resolveAppRoute('/card/default/')).toEqual({ kind: 'card', slug: 'default' });
+    expect(resolveAppRoute('/card/demo-consultant/')).toEqual({ kind: 'card', slug: 'demo-consultant' });
+    expect(resolveAppRoute('/admin/')).toEqual({ kind: 'admin' });
+    expect(getAdminPath()).toBe('/admin/');
   });
 
   it('keeps the formal card theme stable', () => {

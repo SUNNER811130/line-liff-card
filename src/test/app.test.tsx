@@ -97,6 +97,18 @@ describe('App', () => {
     });
   });
 
+  it('renders the admin page on admin route', async () => {
+    window.history.replaceState({}, '', '/admin/');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('電子名片管理')).toBeInTheDocument();
+      expect(screen.getByText('身分與主視覺')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('品牌名稱')).toBeInTheDocument();
+    });
+  });
+
   it('renders the formal card for its slug route', async () => {
     window.history.replaceState({}, '', '/card/default/');
 

@@ -46,9 +46,11 @@ export const buildCardPageViewModel = ({
       fallbackUrl: pageUrl,
       onShare,
       shareDisabled,
+      shareLabel: config.share.buttonLabel,
     }),
   },
   sharePanel: {
     title: config.content.sharePanelTitle,
   },
+  shareButtonLabel: config.share.buttonLabel?.trim() || '分享此電子名片給 LINE 好友',
 });

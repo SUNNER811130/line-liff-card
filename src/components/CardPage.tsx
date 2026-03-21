@@ -10,6 +10,8 @@ import { shareDigitalCard } from '../lib/share';
 
 type CardPageProps = {
   config: CardConfig;
+  previewMode?: boolean;
+  embedded?: boolean;
 };
 
 const shareHintByState = {
@@ -18,7 +20,7 @@ const shareHintByState = {
   fallback: '目前以網頁版顯示，分享時會自動切換到可用方式。',
 } as const;
 
-export function CardPage({ config }: CardPageProps) {
+export function CardPage({ config, previewMode = false, embedded = false }: CardPageProps) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -36,6 +38,10 @@ export function CardPage({ config }: CardPageProps) {
   }, [config]);
 
   useEffect(() => {
+    if (previewMode) {
+      return;
+    }
+
     let mounted = true;
 
     const bootstrapLiff = async () => {
@@ -72,7 +78,7 @@ export function CardPage({ config }: CardPageProps) {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [previewMode]);
 
   useEffect(() => {
     if (!config.modules.showQrCode) {
@@ -106,6 +112,12 @@ export function CardPage({ config }: CardPageProps) {
   }, [config.modules.showQrCode, pageUrl]);
 
   const handleShare = async () => {
+    if (previewMode) {
+      setShareError(null);
+      setShareMessage('目前為管理頁預覽，分享按鈕規則已保留，實際分享請回正式名片頁測試。');
+      return;
+    }
+
     setIsSharing(true);
     setShareMessage(null);
     setShareError(null);
@@ -166,8 +178,10 @@ export function CardPage({ config }: CardPageProps) {
     return liffEnabled ? shareHintByState.fallback : '目前可作為正式電子名片頁使用，之後可再補上 LINE 分享設定。';
   })();
 
+  const PageTag = embedded ? 'div' : 'main';
+
   return (
-    <main className="page-shell">
+    <PageTag className="page-shell">
       <section
         className={`card-surface ${viewModel.appearance.cardSurfaceClassName}`}
         style={viewModel.appearance.cssVariables as CSSProperties}
@@ -239,7 +253,7 @@ export function CardPage({ config }: CardPageProps) {
                   onClick={action.onClick}
                   disabled={action.disabled}
                 >
-                  {isSharing ? '分享中...' : action.label}
+                  {isSharing ? '分享中...' : viewModel.shareButtonLabel}
                 </button>
               ),
             )}
@@ -259,6 +273,6 @@ export function CardPage({ config }: CardPageProps) {
           </aside>
         ) : null}
       </section>
-    </main>
+    </PageTag>
   );
 }

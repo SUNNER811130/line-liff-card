@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AdminPage } from './components/AdminPage';
 import { CardPage } from './components/CardPage';
 import { defaultCardSlug, getCardBySlug, primaryCard } from './content/cards';
 import { getAppHomePath, getCardPath, resolveAppRoute } from './lib/routes';
@@ -36,6 +37,10 @@ export function App() {
 
   if (route.kind === 'home') {
     return <CardPage config={primaryCard} />;
+  }
+
+  if (route.kind === 'admin') {
+    return <AdminPage />;
   }
 
   if (route.kind === 'card') {

@@ -325,6 +325,167 @@ button:disabled {
   letter-spacing: -0.04em;
 }
 
+.admin-shell {
+  padding-bottom: 64px;
+}
+
+.admin-header,
+.admin-panel,
+.admin-note-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+  border-radius: 28px;
+}
+
+.admin-header {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.admin-title,
+.admin-copy,
+.admin-panel-title {
+  margin: 0;
+}
+
+.admin-title {
+  font-size: clamp(2.2rem, 6vw, 3.3rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.admin-copy {
+  margin-top: 10px;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.admin-note-card,
+.admin-panel {
+  padding: 22px;
+}
+
+.admin-layout {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.admin-form-column,
+.admin-preview-column {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-section-heading {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.admin-panel-title {
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+
+.admin-field-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-field,
+.admin-action-card {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-field span,
+.admin-toggle span {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-field input,
+.admin-field textarea,
+.admin-field select {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 39, 61, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  outline: none;
+}
+
+.admin-field input:focus,
+.admin-field textarea:focus,
+.admin-field select:focus {
+  border-color: rgba(24, 54, 95, 0.32);
+  box-shadow: 0 0 0 4px rgba(24, 54, 95, 0.08);
+}
+
+.admin-field textarea {
+  resize: vertical;
+}
+
+.admin-field-full {
+  grid-column: 1 / -1;
+}
+
+.admin-inline-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.admin-hidden-input {
+  display: none;
+}
+
+.admin-file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-action-card {
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(24, 39, 61, 0.08);
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.admin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.admin-toggle input {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-validation {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fbefef;
+  color: #8b2f2f;
+}
+
+.admin-validation-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.admin-panel-sticky {
+  position: static;
+}
+
 @media (min-width: 900px) {
   .card-surface {
     padding: 30px;
@@ -355,5 +516,29 @@ button:disabled {
 
   .qr-download {
     width: auto;
+  }
+
+  .admin-header {
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    align-items: start;
+  }
+
+  .admin-layout {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    align-items: start;
+  }
+
+  .admin-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-inline-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-panel-sticky {
+    position: sticky;
+    top: 18px;
+    z-index: 1;
   }
 }

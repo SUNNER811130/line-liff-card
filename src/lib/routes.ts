@@ -50,6 +50,7 @@ export const getCardShareUrl = (slug: string): string => getCardLiffUrl(slug) ||
 
 export type AppRoute =
   | { kind: 'home' }
+  | { kind: 'admin' }
   | { kind: 'card'; slug: string }
   | { kind: 'not-found'; slug: string | null };
 
@@ -61,6 +62,10 @@ export const resolveAppRoute = (
 
   if (segments.length === 0) {
     return { kind: 'home' };
+  }
+
+  if (segments[0] === 'admin') {
+    return { kind: 'admin' };
   }
 
   if (segments[0] === 'card' && segments[1]) {

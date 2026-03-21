@@ -32,6 +32,7 @@ export type CardAppearanceConfig = {
 export type CardShareConfig = {
   title?: string;
   text?: string;
+  buttonLabel?: string;
 };
 
 export type CardSeoConfig = {
@@ -125,4 +126,5 @@ export type CardPageViewModel = {
   sharePanel: {
     title: string;
   };
+  shareButtonLabel: string;
 };

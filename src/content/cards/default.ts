@@ -52,6 +52,7 @@ export const defaultCard = defineCardConfig({
   share: {
     title: '正式商務電子名片',
     text: '歡迎透過這張電子名片認識我並進一步聯絡。',
+    buttonLabel: '分享此電子名片給 LINE 好友',
   },
   seo: {
     title: '正式商務電子名片',

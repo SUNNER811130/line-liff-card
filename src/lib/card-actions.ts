@@ -8,6 +8,7 @@ type BuildCardActionItemsInput = {
   fallbackUrl: string;
   onShare: () => void;
   shareDisabled?: boolean;
+  shareLabel?: string;
 };
 
 const toLinkAction = (action: CardActionConfig, fallbackUrl: string): CardActionView | null => {
@@ -29,12 +30,13 @@ export const buildCardActionItems = ({
   fallbackUrl,
   onShare,
   shareDisabled = false,
+  shareLabel = SHARE_BUTTON_LABEL,
 }: BuildCardActionItemsInput): CardActionView[] => [
   ...actions.map((action) => toLinkAction(action, fallbackUrl)).filter((action): action is Exclude<CardActionView, { kind: 'button' }> => Boolean(action)),
   {
     kind: 'button',
     key: 'share',
-    label: SHARE_BUTTON_LABEL,
+    label: shareLabel.trim() || SHARE_BUTTON_LABEL,
     tone: 'share',
     onClick: onShare,
     disabled: shareDisabled,

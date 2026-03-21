@@ -1,41 +1,122 @@
-import { useEffect } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { CardPage } from './components/CardPage';
 import { cards, defaultCardSlug, getCardBySlug } from './content/cards';
+import { initLiff, isInClient } from './lib/liff';
+import { getAppHomePath, getCardPath, getCardShareUrl, getCardWebUrl, resolveAppRoute } from './lib/routes';
+import { navigateToUrl } from './lib/runtime';
 import { applyBasicSeo } from './lib/seo';
-import { getAppHomePath, getCardPath, resolveAppRoute } from './lib/routes';
 
 const homeTitle = 'LINE 電子名片列表';
 const homeDescription = '多張可分享的 LINE 電子名片列表，支援獨立 slug、LIFF 分享、QR 與 Web fallback。';
 
 function HomePage() {
+  const [lineMode, setLineMode] = useState<'pending' | 'web' | 'liff'>('pending');
+
   useEffect(() => {
     applyBasicSeo(homeTitle, homeDescription);
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const bootstrapHomeLiff = async () => {
+      const initResult = await initLiff();
+      if (!mounted) {
+        return;
+      }
+
+      if (initResult.status !== 'ready') {
+        setLineMode('web');
+        return;
+      }
+
+      setLineMode((await isInClient()) ? 'liff' : 'web');
+    };
+
+    void bootstrapHomeLiff();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const openCard = (event: MouseEvent<HTMLAnchorElement>, slug: string) => {
+    const targetUrl = lineMode === 'liff' ? getCardShareUrl(slug) : getCardWebUrl(slug);
+    event.preventDefault();
+    navigateToUrl(targetUrl);
+  };
+
   return (
     <main className="page-shell">
       <section className="list-hero">
-        <p className="list-eyebrow">Business Card Collection</p>
-        <h1 className="list-title">多名片版本首頁</h1>
-        <p className="list-description">
-          從同一個 repo 管理多張可展示、可分享、可掃 QR 的 LINE 電子名片。每張卡都對應自己的 slug 路由與 LIFF 分享入口。
-        </p>
+        <div>
+          <p className="list-eyebrow">Business Card Collection</p>
+          <h1 className="list-title">多名片版本首頁</h1>
+        </div>
+        <div className="list-hero-side">
+          <p className="list-description">
+            列表頁會依目前環境自動選擇最穩定的入口。在 LINE 內優先走 card-specific LIFF URL，在外部瀏覽器則維持公開 Web 路由。
+          </p>
+          <div className="list-hero-status">
+            <span className={`list-mode-pill list-mode-${lineMode}`}>
+              {lineMode === 'pending' ? 'LIFF checking' : lineMode === 'liff' ? 'Open via LIFF URL' : 'Open via Web URL'}
+            </span>
+            <p className="list-status-note">
+              {lineMode === 'pending'
+                ? '等待 LIFF 初始化完成後再切換卡片，避免 secondary redirect 把畫面拉回列表。'
+                : lineMode === 'liff'
+                  ? '目前偵測到 LINE / LIFF 容器，開啟名片會直接使用每張卡自己的 LIFF URL。'
+                  : '目前為一般瀏覽器模式，開啟名片會維持 /card/:slug 公開網址。'}
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="card-list-grid">
-        {cards.map((card) => (
-          <article key={card.slug} className="list-card">
-            <p className="list-card-brand">{card.brand}</p>
-            <h2 className="list-card-title">{card.englishName}</h2>
-            <p className="list-card-subtitle">{card.mainTitle}</p>
-            <p className="list-card-url">{getCardPath(card.slug)}</p>
-            <div className="list-card-actions">
-              <a className="list-card-button" href={getCardPath(card.slug)}>
-                開啟名片
-              </a>
-            </div>
-          </article>
-        ))}
+        {cards.map((card) => {
+          const webUrl = getCardWebUrl(card.slug);
+          const liffUrl = getCardShareUrl(card.slug);
+
+          return (
+            <article key={card.slug} className={`list-card list-card-${card.theme}`}>
+              <div className="list-card-preview">
+                <div className="list-card-preview-shell">
+                  <p className="list-card-brand">{card.brand}</p>
+                  <h2 className="list-card-title">{card.englishName}</h2>
+                  <p className="list-card-subtitle">{card.shortTagline}</p>
+                </div>
+              </div>
+
+              <div className="list-card-copy">
+                <p className="list-card-theme">{card.theme === 'corporate' ? '企業穩重型' : '高端顧問型'}</p>
+                <p className="list-card-main">{card.mainTitle}</p>
+                <p className="list-card-description">{card.description}</p>
+              </div>
+
+              <dl className="list-card-meta">
+                <div>
+                  <dt>Web URL</dt>
+                  <dd>{webUrl}</dd>
+                </div>
+                <div>
+                  <dt>LIFF URL</dt>
+                  <dd>{liffUrl || '未設定 LIFF ID'}</dd>
+                </div>
+              </dl>
+
+              <div className="list-card-actions">
+                <a
+                  className="list-card-button"
+                  href={getCardPath(card.slug)}
+                  onClick={(event) => openCard(event, card.slug)}
+                  aria-label={`開啟名片 ${card.englishName}`}
+                >
+                  開啟名片
+                </a>
+              </div>
+            </article>
+          );
+        })}
       </section>
     </main>
   );

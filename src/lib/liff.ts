@@ -161,7 +161,9 @@ export const getLiffEntryUrl = (): string => {
   return liffId ? `https://liff.line.me/${liffId}` : '';
 };
 
-export const getCurrentUrl = (): string => {
+export const getCurrentUrl = (): string => getCurrentWindowUrl().toString();
+
+export const getStableCurrentUrl = (): string => {
   cleanupLoginRedirectUrl();
   return getCurrentWindowUrl().toString();
 };
@@ -218,6 +220,7 @@ export async function initLiff(): Promise<LiffInitResult> {
         assertUrlWithinEndpoint(currentUrl);
         const sdk = await loadLiffSdk();
         await sdk.init({ liffId });
+        cleanupLoginRedirectUrl();
         lastInitResult = { status: 'ready' };
         return lastInitResult;
       } catch (error) {
@@ -271,7 +274,7 @@ export async function ensureLogin(): Promise<boolean> {
     return false;
   }
 
-  sdk.login({ redirectUri: getCurrentUrl() });
+  sdk.login({ redirectUri: getStableCurrentUrl() });
   return false;
 }
 
@@ -337,7 +340,7 @@ export async function createPermanentLink(url?: string): Promise<string> {
     throw new Error(initResult.message);
   }
 
-  const targetUrl = url ?? getCurrentUrl();
+  const targetUrl = url ?? getStableCurrentUrl();
   assertUrlWithinEndpoint(targetUrl);
 
   const sdk = await loadLiffSdk();
@@ -345,7 +348,7 @@ export async function createPermanentLink(url?: string): Promise<string> {
 }
 
 export async function buildShareTargetUrl(url?: string): Promise<string> {
-  const targetUrl = url ?? (hasWindow() ? getCurrentUrl() : '');
+  const targetUrl = url ?? (hasWindow() ? getStableCurrentUrl() : '');
   const liffEntryUrl = getLiffEntryUrl();
 
   if (!getConfiguredLiffId()) {

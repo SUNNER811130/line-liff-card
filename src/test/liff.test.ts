@@ -152,6 +152,23 @@ describe('liff helpers', () => {
     expect(window.location.search).toBe('');
   });
 
+  it('does not strip LIFF redirect params before init resolves', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+    window.history.replaceState(
+      {},
+      '',
+      '/line-liff-card/card/default/?liff.state=foo&access_token=bar#connect',
+    );
+
+    const { __resetLiffForTests, getCurrentUrl, initLiff } = await import('../lib/liff');
+    __resetLiffForTests();
+
+    expect(getCurrentUrl()).toContain('liff.state=foo');
+    await expect(initLiff()).resolves.toEqual({ status: 'ready' });
+    expect(window.location.search).toBe('');
+  });
+
   it('returns profile when LIFF profile is available', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);

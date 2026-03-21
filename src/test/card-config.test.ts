@@ -1,4 +1,5 @@
 import { cards, getCardBySlug } from '../content/cards';
+import { getCardLiffUrl, getCardShareUrl, getCardWebUrl } from '../lib/routes';
 
 describe('card collection', () => {
   it('loads required card fields', () => {
@@ -26,5 +27,16 @@ describe('card collection', () => {
     expect(getCardBySlug('default')?.englishName).toBe('Client Success Office');
     expect(getCardBySlug('demo-consultant')?.englishName).toBe('Demo Consultant Studio');
     expect(getCardBySlug('missing-card')).toBeUndefined();
+  });
+
+  it('builds card-specific web, liff, and share urls', () => {
+    expect(getCardWebUrl('default')).toContain('/card/default/');
+    expect(getCardLiffUrl('default', 'test-liff-id')).toBe('https://liff.line.me/test-liff-id/card/default/');
+    expect(getCardShareUrl('demo-consultant')).toContain('/card/demo-consultant/');
+  });
+
+  it('keeps both card themes distinct', () => {
+    expect(getCardBySlug('default')?.theme).toBe('corporate');
+    expect(getCardBySlug('demo-consultant')?.theme).toBe('consultant');
   });
 });

@@ -6,8 +6,10 @@ export type CardButton = {
 
 export type CardConfig = {
   slug: string;
+  theme: 'corporate' | 'consultant';
   brand: string;
   englishName: string;
+  shortTagline: string;
   heroTitle: string;
   mainTitle: string;
   description: string;

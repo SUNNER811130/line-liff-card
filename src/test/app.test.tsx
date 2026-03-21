@@ -1,7 +1,9 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { App } from '../App';
 import { __resetLiffForTests } from '../lib/liff';
+import * as runtime from '../lib/runtime';
 
 const { liffCoreMock } = vi.hoisted(() => ({
   liffCoreMock: {
@@ -62,6 +64,8 @@ vi.mock('@line/liff/permanent-link', () => ({
 }));
 
 describe('App', () => {
+  let navigateSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     window.history.replaceState({}, '', '/');
     vi.stubEnv('VITE_LIFF_ID', '');
@@ -76,6 +80,7 @@ describe('App', () => {
       pictureUrl: 'https://example.test/avatar.jpg',
     });
     liffCoreMock.isApiAvailable.mockReturnValue(false);
+    navigateSpy = vi.spyOn(runtime, 'navigateToUrl').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -83,15 +88,16 @@ describe('App', () => {
     __resetLiffForTests();
     vi.unstubAllEnvs();
     vi.clearAllMocks();
+    navigateSpy.mockRestore();
   });
 
   it('renders the card collection on the home page', () => {
     render(<App />);
 
     expect(screen.getByText('多名片版本首頁')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: '開啟名片' })).toHaveLength(2);
-    expect(screen.getByText('/card/default/')).toBeInTheDocument();
-    expect(screen.getByText('/card/demo-consultant/')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /開啟名片/ })).toHaveLength(2);
+    expect(screen.getAllByText(/\/card\/default\//).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\/card\/demo-consultant\//).length).toBeGreaterThan(0);
   });
 
   it('renders the default card for its slug route', async () => {
@@ -101,7 +107,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('Client Success Office').length).toBeGreaterThan(0);
-      expect(screen.getByText('適合對外展示、分享與導流的商務電子名片預設版型')).toBeInTheDocument();
+      expect(screen.getByText('適合顧問、業務、客戶成功與 B2B 溝通的正式展示頁')).toBeInTheDocument();
     });
   });
 
@@ -112,8 +118,8 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('Demo Consultant Studio').length).toBeGreaterThan(0);
-      expect(screen.getByText('面向專案開發、顧問服務與企業合作的展示型電子名片')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: '加入 LINE 顧問窗口' })).toBeInTheDocument();
+      expect(screen.getByText('以更精緻的留白、排版節奏與品牌感呈現個人服務價值')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '加入顧問窗口' })).toBeInTheDocument();
     });
   });
 
@@ -136,7 +142,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByText('LIFF-READY')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '開啟 LINE 版名片' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '在 LINE 中開啟名片' }).length).toBeGreaterThan(0);
     });
   });
 
@@ -152,7 +158,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByText('SHARE-AVAILABLE')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '分享好友' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '分享好友' }).length).toBeGreaterThan(0);
     });
   });
 
@@ -198,6 +204,53 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '請先登入 LINE' })).toBeInTheDocument();
       expect(screen.getByText(/尚未登入 LINE，登入後才會顯示個人化資訊/)).toBeInTheDocument();
+    });
+  });
+
+  it('opens card-specific LIFF url from the list when running inside LIFF', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/`);
+    liffCoreMock.isInClient.mockReturnValue(true);
+
+    render(<App />);
+
+    const user = userEvent.setup();
+    await waitFor(() => {
+      expect(screen.getByText('Open via LIFF URL')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('link', { name: '開啟名片 Client Success Office' }));
+
+    expect(runtime.navigateToUrl).toHaveBeenCalledWith('https://liff.line.me/test-liff-id/card/default/');
+  });
+
+  it('keeps web route hrefs on the list in browser mode', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Open via Web URL')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('link', { name: '開啟名片 Client Success Office' })).toHaveAttribute('href', '/card/default/');
+    expect(screen.getByRole('link', { name: '開啟名片 Demo Consultant Studio' })).toHaveAttribute(
+      'href',
+      '/card/demo-consultant/',
+    );
+  });
+
+  it('renders distinct theme classes for both cards', async () => {
+    window.history.replaceState({}, '', '/card/default/');
+    const { rerender } = render(<App />);
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-theme="corporate"]')).not.toBeNull();
+    });
+
+    window.history.replaceState({}, '', '/card/demo-consultant/');
+    rerender(<App />);
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-theme="consultant"]')).not.toBeNull();
     });
   });
 });

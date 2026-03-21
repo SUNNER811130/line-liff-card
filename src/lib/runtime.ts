@@ -62,6 +62,19 @@ export const getPublicPageUrl = (): string => {
   return currentUrl.toString();
 };
 
+export const getAbsoluteUrl = (pathname: string): string => {
+  if (typeof window === 'undefined') {
+    const siteUrl = import.meta.env.VITE_SITE_URL?.trim();
+    return siteUrl ? new URL(pathname, siteUrl).toString() : pathname;
+  }
+
+  return new URL(pathname, window.location.origin).toString();
+};
+
+export const navigateToUrl = (targetUrl: string) => {
+  window.location.assign(targetUrl);
+};
+
 export const resolveActionUrl = (value: string, fallbackUrl: string): string => {
   if (isPlaceholderValue(value)) {
     return fallbackUrl;

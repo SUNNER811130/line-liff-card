@@ -22,6 +22,32 @@ export const getCardPath = (slug: string, basePath: string = import.meta.env.BAS
 export const getAppHomePath = (basePath: string = import.meta.env.BASE_URL): string =>
   normalizeBasePath(basePath);
 
+const getSiteOrigin = (): string => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  const configuredSiteUrl = import.meta.env.VITE_SITE_URL?.trim();
+  if (configuredSiteUrl) {
+    return new URL(configuredSiteUrl).origin;
+  }
+
+  return 'https://example.invalid';
+};
+
+export const getCardWebUrl = (slug: string, basePath: string = import.meta.env.BASE_URL): string =>
+  new URL(getCardPath(slug, basePath), `${getSiteOrigin()}${getAppHomePath(basePath)}`).toString();
+
+export const getCardLiffUrl = (slug: string, liffId = import.meta.env.VITE_LIFF_ID?.trim()): string => {
+  if (!liffId) {
+    return '';
+  }
+
+  return `https://liff.line.me/${liffId}/card/${trimSlashes(slug)}/`;
+};
+
+export const getCardShareUrl = (slug: string): string => getCardLiffUrl(slug) || getCardWebUrl(slug);
+
 export type AppRoute =
   | { kind: 'home' }
   | { kind: 'card'; slug: string }

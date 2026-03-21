@@ -1,9 +1,33 @@
 <svg width="1200" height="1400" viewBox="0 0 1200 1400" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="1400" fill="#DCE7FB"/>
-  <rect x="120" y="140" width="960" height="1120" rx="44" fill="#F8FBFF"/>
-  <circle cx="600" cy="480" r="190" fill="#A8C3F8"/>
-  <rect x="340" y="720" width="520" height="64" rx="20" fill="#0F4CDB"/>
-  <rect x="300" y="824" width="600" height="48" rx="18" fill="#7EA6F2"/>
-  <rect x="360" y="910" width="480" height="48" rx="18" fill="#B6CBF8"/>
-  <text x="600" y="1110" text-anchor="middle" fill="#12305F" font-size="68" font-family="Arial, sans-serif" font-weight="700">PLACEHOLDER</text>
+  <rect width="1200" height="1400" fill="#E9EDF3"/>
+  <rect x="72" y="72" width="1056" height="1256" rx="48" fill="url(#panel)"/>
+  <rect x="132" y="132" width="936" height="1136" rx="36" fill="#F8FAFD" fill-opacity="0.94"/>
+  <rect x="184" y="184" width="832" height="88" rx="22" fill="#EEF3FA"/>
+  <rect x="216" y="212" width="168" height="32" rx="16" fill="#21426D"/>
+  <rect x="826" y="212" width="158" height="32" rx="16" fill="#D6E0F0"/>
+  <rect x="184" y="320" width="832" height="428" rx="32" fill="url(#hero)"/>
+  <rect x="232" y="368" width="272" height="44" rx="22" fill="white" fill-opacity="0.18"/>
+  <rect x="232" y="464" width="382" height="160" rx="28" fill="white" fill-opacity="0.1"/>
+  <rect x="232" y="786" width="380" height="26" rx="13" fill="#213B63"/>
+  <rect x="232" y="836" width="548" height="72" rx="24" fill="#2156A6"/>
+  <rect x="232" y="938" width="478" height="24" rx="12" fill="#7F90A8"/>
+  <rect x="232" y="986" width="430" height="24" rx="12" fill="#AAB6C8"/>
+  <rect x="232" y="1060" width="252" height="70" rx="22" fill="#06C755"/>
+  <rect x="506" y="1060" width="252" height="70" rx="22" fill="#21426D"/>
+  <rect x="780" y="1060" width="188" height="70" rx="22" fill="#AE8B4F"/>
+  <text x="232" y="576" fill="white" font-size="86" font-family="Aptos, Noto Sans TC, sans-serif" font-weight="700">Business</text>
+  <text x="232" y="654" fill="white" font-size="86" font-family="Aptos, Noto Sans TC, sans-serif" font-weight="700">Presentation</text>
+  <text x="232" y="1188" fill="#213B63" font-size="44" font-family="Aptos, Noto Sans TC, sans-serif" font-weight="600">Structured for client-facing LINE contact pages</text>
+  <defs>
+    <linearGradient id="panel" x1="72" y1="72" x2="1128" y2="1328" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B3762"/>
+      <stop offset="0.58" stop-color="#21426D"/>
+      <stop offset="1" stop-color="#AE8B4F"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="184" y1="320" x2="1016" y2="748" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#203A66"/>
+      <stop offset="0.5" stop-color="#2C5CA8"/>
+      <stop offset="1" stop-color="#9B7B47"/>
+    </linearGradient>
+  </defs>
 </svg>

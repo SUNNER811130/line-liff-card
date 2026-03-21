@@ -1,11 +1,30 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" fill="#F5F8FC"/>
-  <rect x="54" y="54" width="1092" height="522" rx="32" fill="white"/>
-  <rect x="108" y="108" width="330" height="414" rx="28" fill="#DCE7FB"/>
-  <rect x="494" y="154" width="466" height="28" rx="14" fill="#12305F"/>
-  <rect x="494" y="214" width="550" height="84" rx="18" fill="#0F4CDB"/>
-  <rect x="494" y="332" width="472" height="22" rx="11" fill="#8CA7D9"/>
-  <rect x="494" y="374" width="420" height="22" rx="11" fill="#B5C5E4"/>
-  <rect x="494" y="432" width="192" height="54" rx="18" fill="#06C755"/>
-  <rect x="710" y="432" width="192" height="54" rx="18" fill="#FF8A00"/>
+  <rect width="1200" height="630" fill="#E9EDF3"/>
+  <rect x="42" y="42" width="1116" height="546" rx="34" fill="url(#frame)"/>
+  <rect x="78" y="78" width="1044" height="474" rx="28" fill="#F9FBFD"/>
+  <rect x="114" y="114" width="326" height="402" rx="28" fill="url(#visual)"/>
+  <rect x="154" y="152" width="146" height="28" rx="14" fill="white" fill-opacity="0.2"/>
+  <rect x="154" y="216" width="212" height="96" rx="24" fill="white" fill-opacity="0.12"/>
+  <rect x="498" y="146" width="256" height="28" rx="14" fill="#D7E0EE"/>
+  <rect x="498" y="198" width="470" height="82" rx="22" fill="#21426D"/>
+  <rect x="498" y="302" width="546" height="22" rx="11" fill="#2156A6"/>
+  <rect x="498" y="348" width="438" height="22" rx="11" fill="#7F90A8"/>
+  <rect x="498" y="394" width="386" height="22" rx="11" fill="#B1BCCB"/>
+  <rect x="498" y="454" width="198" height="54" rx="18" fill="#06C755"/>
+  <rect x="718" y="454" width="198" height="54" rx="18" fill="#21426D"/>
+  <rect x="938" y="454" width="106" height="54" rx="18" fill="#AE8B4F"/>
+  <text x="154" y="278" fill="white" font-size="38" font-family="Aptos, Noto Sans TC, sans-serif" font-weight="700">LINE</text>
+  <text x="154" y="324" fill="white" font-size="38" font-family="Aptos, Noto Sans TC, sans-serif" font-weight="700">Business Card</text>
+  <text x="498" y="249" fill="white" font-size="42" font-family="Aptos, Noto Sans TC, sans-serif" font-weight="700">Production-ready presentation</text>
+  <defs>
+    <linearGradient id="frame" x1="42" y1="42" x2="1158" y2="588" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#19345E"/>
+      <stop offset="1" stop-color="#AE8B4F"/>
+    </linearGradient>
+    <linearGradient id="visual" x1="114" y1="114" x2="440" y2="516" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#203A66"/>
+      <stop offset="0.6" stop-color="#2156A6"/>
+      <stop offset="1" stop-color="#9B7B47"/>
+    </linearGradient>
+  </defs>
 </svg>

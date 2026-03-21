@@ -125,12 +125,27 @@ VITE_LIFF_ID=your-liff-id VITE_SITE_URL=https://<user>.github.io/line-liff-card/
 
 ## 10. Card Content
 
-請修改：
+正式展示版的內容主要來自：
 
 - `src/content/card.config.ts`
+  - `brand`：品牌標題 / badge
+  - `heroTitle`：主標
+  - `mainTitle`：副標
+  - `description`：說明文字
+  - `button1`、`button2`、`button3`：按鈕文案與連結
 
 若要替換圖片，請把新檔案放進：
 
 - `public/images/`
 
 然後更新 `heroImage` 與 `seo.ogImage` 路徑。
+
+目前正式展示版的主頁結構與呈現位置：
+
+- `src/components/CardPage.tsx`
+  - 公開網址區
+  - QR 區
+  - 主操作區塊
+  - status / diagnostics
+- `src/styles.css`
+  - 按鈕高度、間距、卡片比例與手機優先樣式

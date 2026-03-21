@@ -99,6 +99,7 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string, fallbackUrl: str
 });
 
 export function CardPage({ config }: CardPageProps) {
+  const isDevDiagnostics = !import.meta.env.PROD;
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [shareState, setShareState] = useState<'idle' | 'copied' | 'shared' | 'failed'>('idle');
@@ -176,6 +177,8 @@ export function CardPage({ config }: CardPageProps) {
       return;
     }
 
+    let mounted = true;
+
     QRCode.toDataURL(pageUrl, {
       width: 320,
       margin: 1,
@@ -184,8 +187,20 @@ export function CardPage({ config }: CardPageProps) {
         light: '#ffffff',
       },
     })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(''));
+      .then((dataUrl) => {
+        if (mounted) {
+          setQrDataUrl(dataUrl);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setQrDataUrl('');
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [config.qrEnabled, pageUrl]);
 
   const handleCopy = async () => {
@@ -258,6 +273,30 @@ export function CardPage({ config }: CardPageProps) {
     link.click();
   };
 
+  const operationalStatus = (() => {
+    if (!liffEnabled) {
+      return '目前以公開網頁模式展示，LIFF 分享功能可在設定 LIFF ID 後啟用。';
+    }
+
+    if (liffInitError) {
+      return 'LIFF 設定已偵測，但目前初始化失敗，建議改由 LINE 內開啟正式連結。';
+    }
+
+    if (!inClient) {
+      return '目前為外部瀏覽器模式，可先查看內容、複製網址或掃描 QR，再切換到 LINE 開啟。';
+    }
+
+    if (!loggedIn) {
+      return '已進入 LINE 環境，登入後即可使用分享好友功能。';
+    }
+
+    if (!shareAvailable) {
+      return '已進入 LINE，但目前容器不支援分享選擇器，名片內容仍可正常瀏覽。';
+    }
+
+    return '目前可直接透過 LIFF 將名片分享給好友或客戶。';
+  })();
+
   const mainAction = (() => {
     if (!liffEnabled) {
       return {
@@ -328,6 +367,13 @@ export function CardPage({ config }: CardPageProps) {
             <a className="hero-link" href={heroUrl} target="_blank" rel="noreferrer">
               <img className="hero-image" src={toAssetUrl(config.heroImage)} alt={config.englishName} />
             </a>
+            <div className="media-overlay">
+              <span className="media-badge">Official Presentation Template</span>
+              <div className="media-summary">
+                <p className="media-summary-label">Business Card Experience</p>
+                <p className="media-summary-title">{config.englishName}</p>
+              </div>
+            </div>
           </div>
 
           <div className="content-column">
@@ -340,6 +386,10 @@ export function CardPage({ config }: CardPageProps) {
             <h1 className="hero-title">{config.heroTitle}</h1>
             <h2 id="overview" className="main-title">{config.mainTitle}</h2>
             <p className="description">{config.description}</p>
+            <div className="status-strip" aria-live="polite">
+              <span className="status-strip-label">Status</span>
+              <p className="status-strip-text">{operationalStatus}</p>
+            </div>
 
             <ul className="bullet-list">
               {config.bullets.map((bullet) => (
@@ -364,7 +414,10 @@ export function CardPage({ config }: CardPageProps) {
 
             <section id="booking" className="liff-panel">
               <div className="liff-panel-header">
-                <p className="liff-panel-title">LINE LIFF</p>
+                <div>
+                  <p className="liff-panel-title">Main Action</p>
+                  <p className="liff-panel-subtitle">保留 LIFF 分享能力，並兼容外部瀏覽器瀏覽與導流。</p>
+                </div>
                 <span className={`liff-status-chip ${liffReady ? 'is-ready' : 'is-pending'}`}>
                   {liffReady ? 'ready' : 'standby'}
                 </span>
@@ -387,58 +440,75 @@ export function CardPage({ config }: CardPageProps) {
               {liffActionError && <p className="liff-message liff-message-error">{liffActionError}</p>}
               {shareStatus && <p className="liff-message liff-message-success">{shareStatus}</p>}
 
-              <dl className="liff-debug-panel">
-                <div>
-                  <dt>hasLiffId</dt>
-                  <dd>{String(liffEnabled)}</dd>
+              {isDevDiagnostics ? (
+                <dl className="liff-debug-panel">
+                  <div>
+                    <dt>hasLiffId</dt>
+                    <dd>{String(liffEnabled)}</dd>
+                  </div>
+                  <div>
+                    <dt>inClient</dt>
+                    <dd>{String(inClient)}</dd>
+                  </div>
+                  <div>
+                    <dt>loggedIn</dt>
+                    <dd>{String(loggedIn)}</dd>
+                  </div>
+                  <div>
+                    <dt>shareAvailable</dt>
+                    <dd>{String(shareAvailable)}</dd>
+                  </div>
+                  <div>
+                    <dt>currentUrl</dt>
+                    <dd>{pageUrl}</dd>
+                  </div>
+                  <div>
+                    <dt>expectedEndpoint</dt>
+                    <dd>{expectedEndpoint}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <div className="diagnostics-summary">
+                  <p className="diagnostics-summary-title">系統狀態</p>
+                  <p className="diagnostics-summary-text">{operationalStatus}</p>
                 </div>
-                <div>
-                  <dt>inClient</dt>
-                  <dd>{String(inClient)}</dd>
-                </div>
-                <div>
-                  <dt>loggedIn</dt>
-                  <dd>{String(loggedIn)}</dd>
-                </div>
-                <div>
-                  <dt>shareAvailable</dt>
-                  <dd>{String(shareAvailable)}</dd>
-                </div>
-                <div>
-                  <dt>currentUrl</dt>
-                  <dd>{pageUrl}</dd>
-                </div>
-                <div>
-                  <dt>expectedEndpoint</dt>
-                  <dd>{expectedEndpoint}</dd>
-                </div>
-              </dl>
+              )}
             </section>
           </div>
         </div>
 
         {config.qrEnabled && (
           <aside className="qr-panel">
-            <div>
+            <div className="qr-panel-group">
               <p className="qr-label">Public Card URL</p>
               <p className="qr-url">{pageUrl}</p>
             </div>
-            <div className="qr-box">
-              {qrDataUrl ? <img src={qrDataUrl} alt="Card QR code" /> : <span>Generating QR...</span>}
+            <div className="qr-panel-group">
+              <p className="section-heading">公開分享 QR</p>
+              <div className="qr-box">
+                {qrDataUrl ? <img src={qrDataUrl} alt="Card QR code" /> : <span>Generating QR...</span>}
+              </div>
             </div>
-            <div className="utility-actions">
-              <button type="button" className="utility-button" onClick={handleCopy}>
-                複製名片網址
-              </button>
-              <button type="button" className="utility-button utility-button-secondary" onClick={handleDownload}>
-                下載 QR PNG
-              </button>
+            <div className="qr-panel-group">
+              <p className="section-heading">分享與保存</p>
+              <div className="utility-actions">
+                <button type="button" className="utility-button" onClick={handleCopy}>
+                  複製名片網址
+                </button>
+                <button type="button" className="utility-button utility-button-secondary" onClick={handleDownload}>
+                  下載 QR PNG
+                </button>
+              </div>
             </div>
-            {copyState === 'copied' && <p className="utility-status">網址已複製。</p>}
-            {copyState === 'failed' && <p className="utility-status">複製失敗，請手動複製。</p>}
-            {shareState === 'copied' && <p className="utility-status">LIFF 分享連結已複製。</p>}
-            {shareState === 'shared' && <p className="utility-status">已呼叫 LINE 分享流程。</p>}
-            {shareState === 'failed' && !liffActionError && <p className="utility-status">LIFF 分享流程失敗。</p>}
+            <div className="qr-panel-group">
+              <p className="section-heading">簡易狀態</p>
+              {copyState === 'copied' && <p className="utility-status">網址已複製，可直接貼給客戶或同事。</p>}
+              {copyState === 'failed' && <p className="utility-status">複製失敗，請改用手動複製公開網址。</p>}
+              {shareState === 'copied' && <p className="utility-status">LIFF 分享連結已複製。</p>}
+              {shareState === 'shared' && <p className="utility-status">已呼叫 LINE 分享流程。</p>}
+              {shareState === 'failed' && !liffActionError && <p className="utility-status">LIFF 分享流程失敗，請稍後再試。</p>}
+              {copyState === 'idle' && shareState === 'idle' && <p className="utility-status">{operationalStatus}</p>}
+            </div>
           </aside>
         )}
       </section>

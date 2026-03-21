@@ -17,7 +17,13 @@ LINE 電子名片靜態站 v1。使用 Vite、React、TypeScript 與本地設定
 
 ## Content Editing
 
-主要文案與按鈕設定集中在 `src/content/card.config.ts`。
+正式商務電子名片的主要內容集中在以下位置：
+
+- 文案與按鈕文字：`src/content/card.config.ts`
+- 按鈕連結與 hero 連結：`src/content/card.config.ts`
+- 主頁版面與區塊結構：`src/components/CardPage.tsx`
+- 視覺樣式：`src/styles.css`
+- 主視覺與 OG 圖：`public/images/hero-placeholder.svg`、`public/images/og-placeholder.svg`
 
 ## LIFF Setup
 
@@ -107,3 +113,20 @@ VITE_LIFF_ID=your-liff-id VITE_SITE_URL=https://<user>.github.io/line-liff-card/
 ```
 
 如果只是在一般瀏覽器本機開發，UI 會保留完整卡片與 QR 功能，不會因為沒有 `LIFF_ID` 而白屏。
+
+## Production Content Notes
+
+若要替換成你的正式客戶內容，優先修改：
+
+- `src/content/card.config.ts`
+  - `brand`：品牌標題 / badge
+  - `heroTitle`：主標
+  - `mainTitle`：副標
+  - `description`：說明文字
+  - `button1`、`button2`、`button3`：按鈕文案與連結
+- `public/images/hero-placeholder.svg`
+  - 替換卡片主視覺，或直接改 `heroImage` 指向你的照片 / 品牌圖
+- `public/images/og-placeholder.svg`
+  - 替換社群分享縮圖
+
+如果暫時沒有正式網址，可以先使用站內 section anchor 或正式入口頁，避免把 `example.com`、`line.ee/example`、`alex@example.com` 這類 placeholder 連結帶到成品環境。

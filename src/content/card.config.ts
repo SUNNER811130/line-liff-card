@@ -27,13 +27,13 @@ export type CardConfig = {
 };
 
 export const cardConfig: CardConfig = {
-  brand: 'BUSINESS CONTACT CARD',
-  englishName: 'Alex Chen',
-  heroTitle: 'Professional Contact Gateway',
-  mainTitle: '整合聯絡方式、品牌介紹與洽詢入口的正式商務電子名片',
+  brand: 'ELEVATE BUSINESS CARD',
+  englishName: 'Client Success Office',
+  heroTitle: '品牌聯絡、服務說明與商務洽詢的正式入口',
+  mainTitle: '適合對外展示、分享與導流的商務電子名片預設版型',
   description:
-    '適用於商務開發、品牌介紹與客戶初次接觸。頁面保留專業視覺與行動導流能力，並可透過 LIFF 在 LINE 內直接分享給好友。',
-  bullets: ['正式商務視覺版型', '支援 GitHub Pages 對外展示', '支援 LIFF 分享與公開網址 QR'],
+    '整合品牌識別、服務重點、公開網址、QR 與 LINE 分享能力，適合做為客戶初次接觸、展會交換資訊與後續預約洽詢的正式商務頁面。',
+  bullets: ['商務簡報級視覺呈現', '支援 GitHub Pages 正式對外展示', '保留 LIFF 分享與外部瀏覽器 fallback'],
   heroImage: 'images/hero-placeholder.svg',
   heroLink: '#overview',
   button1: {
@@ -53,10 +53,10 @@ export const cardConfig: CardConfig = {
   },
   qrEnabled: true,
   seo: {
-    title: 'Alex Chen | LINE 電子名片',
-    description: '正式商務風格的 LINE 電子名片，可部署到 GitHub Pages 並支援 LIFF 分享。',
-    ogTitle: 'Alex Chen | LINE 電子名片',
-    ogDescription: '正式商務風格的 LINE 電子名片，可部署到 GitHub Pages 並支援 LIFF 分享。',
+    title: 'Elevate Business Card | LINE 電子名片',
+    description: '正式商務風格的 LINE 電子名片預設版型，支援公開網址、QR、LIFF 分享與外部瀏覽器 fallback。',
+    ogTitle: 'Elevate Business Card | LINE 電子名片',
+    ogDescription: '正式商務風格的 LINE 電子名片預設版型，支援公開網址、QR、LIFF 分享與外部瀏覽器 fallback。',
     ogImage: 'images/og-placeholder.svg',
   },
 };

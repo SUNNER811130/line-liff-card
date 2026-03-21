@@ -103,6 +103,22 @@ VITE_SITE_URL=https://<user>.github.io/line-liff-card/card/default/
   - 已在 LINE client 內成功初始化
   - 且 `isApiAvailable('shareTargetPicker') === true`
 
+## Optional LINE Personalization
+
+目前專案已支援在 LIFF 內顯示可選的 LINE 個人化資訊：
+
+- LINE 暱稱
+- 頭像
+
+要完整啟用，LINE Developers Console 至少需要確認：
+
+- `profile`
+  - 用於讀取 `liff.getProfile()`
+- `openid`
+  - 建議一併開啟，讓登入與基本身分授權流程較完整
+
+若使用者未授權、scope 未開啟，或目前不是可讀取 profile 的 LIFF 情境，頁面只會顯示簡潔提示，不會報錯或中斷分享流程。
+
 ## GitHub Pages
 
 本專案已內建 [`.github/workflows/deploy-pages.yml`](/home/usersun/projects/line-liff-card/.github/workflows/deploy-pages.yml)，每次 push 到 `main` 都會自動：

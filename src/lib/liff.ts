@@ -15,6 +15,7 @@ type LiffSdk = {
   init: (config: { liffId: string }) => Promise<void>;
   isInClient: () => boolean;
   isLoggedIn: () => boolean;
+  getProfile: () => Promise<LineProfile>;
   login: (config: { redirectUri: string }) => void;
   isApiAvailable: (apiName: string) => boolean;
   shareTargetPicker: (messages: unknown[]) => Promise<unknown>;
@@ -25,6 +26,23 @@ type LiffSdk = {
 };
 
 type LiffModuleCtor = new () => object;
+
+export type LineProfile = {
+  userId: string;
+  displayName: string;
+  pictureUrl?: string;
+  statusMessage?: string;
+};
+
+export type LineProfileResult =
+  | {
+      status: 'ready';
+      profile: LineProfile;
+    }
+  | {
+      status: 'unavailable';
+      message: string;
+    };
 
 const LIFF_REDIRECT_QUERY_KEYS = [
   'access_token',
@@ -119,6 +137,7 @@ const loadLiffSdk = async (): Promise<LiffSdk> => {
         import('@line/liff/core'),
         import('@line/liff/is-in-client'),
         import('@line/liff/is-logged-in'),
+        import('@line/liff/get-profile'),
         import('@line/liff/login'),
         import('@line/liff/is-api-available'),
         import('@line/liff/share-target-picker'),
@@ -264,6 +283,44 @@ export async function isShareAvailable(): Promise<boolean> {
 
   const sdk = await loadLiffSdk();
   return sdk.isApiAvailable('shareTargetPicker');
+}
+
+export async function getLineProfile(): Promise<LineProfileResult> {
+  if (!getConfiguredLiffId()) {
+    return {
+      status: 'unavailable',
+      message: '未設定 LIFF ID，因此不會顯示 LINE 個人化資訊。',
+    };
+  }
+
+  const initResult = await initLiff();
+  if (initResult.status !== 'ready') {
+    return {
+      status: 'unavailable',
+      message: initResult.status === 'error' ? initResult.message : 'LIFF 尚未啟用，無法讀取 LINE 個人化資訊。',
+    };
+  }
+
+  const sdk = await loadLiffSdk();
+  if (!sdk.isLoggedIn()) {
+    return {
+      status: 'unavailable',
+      message: '尚未登入 LINE，登入後才會顯示個人化資訊。',
+    };
+  }
+
+  try {
+    const profile = await sdk.getProfile();
+    return {
+      status: 'ready',
+      profile,
+    };
+  } catch {
+    return {
+      status: 'unavailable',
+      message: '目前無法取得 LINE 個人資料，可能尚未開啟 profile scope 或使用者未授權。',
+    };
+  }
 }
 
 export async function createPermanentLink(url?: string): Promise<string> {

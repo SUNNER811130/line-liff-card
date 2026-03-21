@@ -9,12 +9,14 @@ import {
   getEndpointFallbackUrl,
   getExpectedEndpoint,
   getLiffEntryUrl,
+  getLineProfile,
   initLiff,
   isCurrentUrlWithinEndpoint,
   isInClient,
   isLoggedIn,
   isShareAvailable,
   shareCard,
+  type LineProfile,
 } from '../lib/liff';
 import { getAppMode, getPublicPageUrl, resolveActionUrl, toAssetUrl } from '../lib/runtime';
 import { applySeo } from '../lib/seo';
@@ -108,6 +110,8 @@ export function CardPage({ config }: CardPageProps) {
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [liffInitError, setLiffInitError] = useState<string | null>(null);
   const [liffActionError, setLiffActionError] = useState<string | null>(null);
+  const [lineProfile, setLineProfile] = useState<LineProfile | null>(null);
+  const [profileHint, setProfileHint] = useState<string | null>(null);
   const [liffReady, setLiffReady] = useState(false);
   const [inClient, setInClient] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
@@ -150,6 +154,8 @@ export function CardPage({ config }: CardPageProps) {
         setInClient(false);
         setLoggedIn(false);
         setShareAvailable(false);
+        setLineProfile(null);
+        setProfileHint('目前無法啟用 LINE 個人化資訊。');
         return;
       }
 
@@ -159,14 +165,32 @@ export function CardPage({ config }: CardPageProps) {
         setInClient(false);
         setLoggedIn(false);
         setShareAvailable(false);
+        setLineProfile(null);
+        setProfileHint('未設定 LIFF 時，頁面會以一般公開名片模式顯示。');
         return;
       }
 
       setLiffInitError(null);
       setLiffReady(true);
-      setInClient(await isInClient());
-      setLoggedIn(await isLoggedIn());
+      const nextInClient = await isInClient();
+      const nextLoggedIn = await isLoggedIn();
+      setInClient(nextInClient);
+      setLoggedIn(nextLoggedIn);
       setShareAvailable(await isShareAvailable());
+
+      const profileResult = await getLineProfile();
+      if (!mounted) {
+        return;
+      }
+
+      if (profileResult.status === 'ready') {
+        setLineProfile(profileResult.profile);
+        setProfileHint(null);
+        return;
+      }
+
+      setLineProfile(null);
+      setProfileHint(nextInClient || nextLoggedIn ? profileResult.message : '目前未進入可讀取個人資料的 LINE 情境。');
     };
 
     bootstrapLiff();
@@ -400,6 +424,33 @@ export function CardPage({ config }: CardPageProps) {
             <h1 className="hero-title">{config.heroTitle}</h1>
             <h2 id="overview" className="main-title">{config.mainTitle}</h2>
             <p className="description">{config.description}</p>
+            <section className="profile-panel" aria-live="polite">
+              <div className="profile-panel-header">
+                <p className="profile-panel-title">LINE Personalization</p>
+              </div>
+              {lineProfile ? (
+                <div className="profile-card">
+                  {lineProfile.pictureUrl ? (
+                    <img
+                      className="profile-avatar"
+                      src={lineProfile.pictureUrl}
+                      alt={`${lineProfile.displayName} avatar`}
+                    />
+                  ) : (
+                    <div className="profile-avatar profile-avatar-fallback" aria-hidden="true">
+                      {lineProfile.displayName.slice(0, 1)}
+                    </div>
+                  )}
+                  <div className="profile-copy">
+                    <p className="profile-label">目前登入 LINE 使用者</p>
+                    <p className="profile-name">{lineProfile.displayName}</p>
+                    <p className="profile-note">已啟用個人化顯示，頁面會依 LINE 暱稱與頭像做出對應呈現。</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="profile-note">{profileHint ?? '目前未顯示個人化資訊。'}</p>
+              )}
+            </section>
             <div className="status-strip" aria-live="polite">
               <span className="status-strip-label">Status</span>
               <p className="status-strip-text">{operationalStatus}</p>
@@ -471,6 +522,10 @@ export function CardPage({ config }: CardPageProps) {
                   <div>
                     <dt>shareAvailable</dt>
                     <dd>{String(shareAvailable)}</dd>
+                  </div>
+                  <div>
+                    <dt>hasProfile</dt>
+                    <dd>{String(Boolean(lineProfile))}</dd>
                   </div>
                   <div>
                     <dt>currentUrl</dt>

@@ -9,6 +9,11 @@ const { liffCoreMock } = vi.hoisted(() => ({
     init: vi.fn().mockResolvedValue(undefined),
     isInClient: vi.fn(() => false),
     isLoggedIn: vi.fn(() => true),
+    getProfile: vi.fn(async () => ({
+      userId: 'u123',
+      displayName: 'LINE Test User',
+      pictureUrl: 'https://example.test/avatar.jpg',
+    })),
     login: vi.fn(),
     isApiAvailable: vi.fn(() => false),
     shareTargetPicker: vi.fn(),
@@ -36,6 +41,10 @@ vi.mock('@line/liff/is-logged-in', () => ({
   default: MockModule,
 }));
 
+vi.mock('@line/liff/get-profile', () => ({
+  default: MockModule,
+}));
+
 vi.mock('@line/liff/login', () => ({
   default: MockModule,
 }));
@@ -57,6 +66,16 @@ describe('App', () => {
     window.history.replaceState({}, '', '/');
     vi.stubEnv('VITE_LIFF_ID', '');
     vi.stubEnv('VITE_SITE_URL', '');
+    liffCoreMock.use.mockReturnThis();
+    liffCoreMock.init.mockResolvedValue(undefined);
+    liffCoreMock.isInClient.mockReturnValue(false);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    liffCoreMock.getProfile.mockResolvedValue({
+      userId: 'u123',
+      displayName: 'LINE Test User',
+      pictureUrl: 'https://example.test/avatar.jpg',
+    });
+    liffCoreMock.isApiAvailable.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -134,6 +153,51 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('SHARE-AVAILABLE')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '分享好友' })).toBeInTheDocument();
+    });
+  });
+
+  it('shows profile personalization when LINE profile is available', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/card/default/`);
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    window.history.replaceState({}, '', '/card/default/');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('LINE Test User')).toBeInTheDocument();
+      expect(screen.getByText('目前登入 LINE 使用者')).toBeInTheDocument();
+    });
+  });
+
+  it('shows concise profile hint when profile is unavailable', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/card/default/`);
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    liffCoreMock.getProfile.mockRejectedValueOnce(new Error('forbidden'));
+    window.history.replaceState({}, '', '/card/default/');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/目前無法取得 LINE 個人資料/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows login hint when user is not logged in', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/card/default/`);
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(false);
+    window.history.replaceState({}, '', '/card/default/');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '請先登入 LINE' })).toBeInTheDocument();
+      expect(screen.getByText(/尚未登入 LINE，登入後才會顯示個人化資訊/)).toBeInTheDocument();
     });
   });
 });

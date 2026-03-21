@@ -6,6 +6,12 @@ const { liffCoreMock, pluginUseMock } = vi.hoisted(() => ({
     init: vi.fn().mockResolvedValue(undefined),
     isInClient: vi.fn(() => false),
     isLoggedIn: vi.fn(() => true),
+    getProfile: vi.fn(async () => ({
+      userId: 'u123',
+      displayName: 'LINE Test User',
+      pictureUrl: 'https://example.test/avatar.jpg',
+      statusMessage: 'hello',
+    })),
     login: vi.fn(),
     isApiAvailable: vi.fn(() => true),
     shareTargetPicker: vi.fn(),
@@ -35,6 +41,10 @@ vi.mock('@line/liff/is-logged-in', () => ({
   default: MockModule,
 }));
 
+vi.mock('@line/liff/get-profile', () => ({
+  default: MockModule,
+}));
+
 vi.mock('@line/liff/login', () => ({
   default: MockModule,
 }));
@@ -56,6 +66,20 @@ describe('liff helpers', () => {
     vi.resetModules();
     vi.unstubAllEnvs();
     vi.clearAllMocks();
+    liffCoreMock.use.mockReturnThis();
+    liffCoreMock.init.mockResolvedValue(undefined);
+    liffCoreMock.isInClient.mockReturnValue(false);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    liffCoreMock.getProfile.mockResolvedValue({
+      userId: 'u123',
+      displayName: 'LINE Test User',
+      pictureUrl: 'https://example.test/avatar.jpg',
+      statusMessage: 'hello',
+    });
+    liffCoreMock.isApiAvailable.mockReturnValue(true);
+    liffCoreMock.permanentLink.createUrlBy.mockImplementation(
+      async (url: string) => `https://liff.line.me/mock?target=${encodeURIComponent(url)}`,
+    );
     window.history.replaceState({}, '', '/line-liff-card/card/default/');
   });
 
@@ -126,5 +150,34 @@ describe('liff helpers', () => {
       redirectUri: `${window.location.origin}/line-liff-card/card/default/#connect`,
     });
     expect(window.location.search).toBe('');
+  });
+
+  it('returns profile when LIFF profile is available', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+
+    const { __resetLiffForTests, getLineProfile } = await import('../lib/liff');
+    __resetLiffForTests();
+
+    await expect(getLineProfile()).resolves.toEqual({
+      status: 'ready',
+      profile: expect.objectContaining({
+        displayName: 'LINE Test User',
+      }),
+    });
+  });
+
+  it('returns unavailable when profile cannot be fetched', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+    liffCoreMock.getProfile.mockRejectedValueOnce(new Error('forbidden'));
+
+    const { __resetLiffForTests, getLineProfile } = await import('../lib/liff');
+    __resetLiffForTests();
+
+    await expect(getLineProfile()).resolves.toEqual({
+      status: 'unavailable',
+      message: expect.stringContaining('profile scope'),
+    });
   });
 });

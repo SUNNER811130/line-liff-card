@@ -62,6 +62,18 @@ VITE_SITE_URL=https://<user>.github.io/line-liff-card/card/demo-consultant/
 - `https://<user>.github.io/line-liff-card/card/<slug>/` 是公開展示網址
 - 只有當目前頁面位於 `VITE_SITE_URL` 指定的 Endpoint URL 範圍內時，LIFF `init()` 與 permanent link 才會成功
 
+## 6.1 LINE Profile Personalization
+
+若要讓頁面顯示 LINE 暱稱與頭像，請在 LINE Developers Console 確認：
+
+- `profile` scope 已開啟
+- `openid` scope 建議一併開啟
+
+如果使用者未授權、目前未登入，或 Console scope 不足，頁面會顯示簡潔提示，例如：
+
+- 尚未登入 LINE，登入後才會顯示個人化資訊
+- 目前無法取得 LINE 個人資料，可能尚未開啟 profile scope 或使用者未授權
+
 ## 7. Production Build
 
 ```bash

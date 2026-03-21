@@ -333,6 +333,75 @@ button {
   font-size: 0.98rem;
 }
 
+.profile-panel {
+  margin-top: 18px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fbfcfe 0%, #eef4fa 100%);
+  border: 1px solid rgba(19, 41, 75, 0.08);
+  border-radius: 18px;
+}
+
+.profile-panel-header,
+.profile-card {
+  display: flex;
+  gap: 14px;
+}
+
+.profile-panel-title,
+.profile-label,
+.profile-name,
+.profile-note {
+  margin: 0;
+}
+
+.profile-panel-title,
+.profile-label {
+  color: #6b778b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-card {
+  align-items: center;
+  margin-top: 12px;
+}
+
+.profile-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  background: #d7e3f5;
+}
+
+.profile-avatar-fallback {
+  display: grid;
+  place-items: center;
+  color: #12305f;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.profile-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-name {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.profile-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.93rem;
+}
+
 .status-strip {
   display: grid;
   gap: 6px;

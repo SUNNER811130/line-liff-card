@@ -103,7 +103,7 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('正式商務電子名片')).toBeInTheDocument();
+      expect(screen.getAllByText('正式商務電子名片').length).toBeGreaterThan(0);
       expect(screen.getByText('職稱')).toBeInTheDocument();
     });
   });
@@ -114,7 +114,7 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('正式商務電子名片')).toBeInTheDocument();
+      expect(screen.getAllByText('正式商務電子名片').length).toBeGreaterThan(0);
       expect(screen.queryByText('Demo Consultant Studio')).not.toBeInTheDocument();
     });
   });

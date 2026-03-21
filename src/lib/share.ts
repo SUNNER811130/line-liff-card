@@ -11,18 +11,18 @@ export type ShareResult = {
 
 const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string) => ({
   type: 'flex' as const,
-  altText: `${config.fullName}｜${config.brand}`,
+  altText: `${config.content.fullName}｜${config.content.brandName}`,
   contents: {
     type: 'bubble' as const,
     hero: {
       type: 'image' as const,
-      url: toAssetUrl(config.heroImage),
+      url: toAssetUrl(config.photo.src),
       size: 'full' as const,
       aspectRatio: '4:3' as const,
       aspectMode: 'cover' as const,
       action: {
         type: 'uri' as const,
-        label: config.fullName,
+        label: config.content.fullName,
         uri: shareUrl,
       },
     },
@@ -33,27 +33,27 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string)
       contents: [
         {
           type: 'text' as const,
-          text: config.brand,
+          text: config.content.brandName,
           size: 'xs' as const,
           weight: 'bold' as const,
           color: '#37506b',
         },
         {
           type: 'text' as const,
-          text: config.fullName,
+          text: config.content.fullName,
           size: 'xl' as const,
           weight: 'bold' as const,
           color: '#132033',
         },
         {
           type: 'text' as const,
-          text: config.title,
+          text: config.content.title,
           size: 'sm' as const,
           color: '#5e6c81',
         },
         {
           type: 'text' as const,
-          text: config.intro,
+          text: config.content.intro,
           wrap: true,
           size: 'sm' as const,
           color: '#5e6c81',
@@ -71,8 +71,8 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string)
           color: '#163863',
           action: {
             type: 'uri' as const,
-            label: config.contactAction.label,
-            uri: resolveActionUrl(config.contactAction.url, pageUrl),
+            label: config.actions[0]?.label ?? '查看名片',
+            uri: resolveActionUrl(config.actions[0]?.url ?? '', pageUrl),
           },
         },
         {
@@ -80,8 +80,8 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string)
           style: 'secondary' as const,
           action: {
             type: 'uri' as const,
-            label: config.bookingAction.label,
-            uri: resolveActionUrl(config.bookingAction.url, pageUrl),
+            label: config.actions[1]?.label ?? '立即聯絡',
+            uri: resolveActionUrl(config.actions[1]?.url ?? '', pageUrl),
           },
         },
       ],
@@ -90,7 +90,7 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string)
 });
 
 const buildLineShareUrl = (config: CardConfig, pageUrl: string) =>
-  `https://line.me/R/msg/text/?${encodeURIComponent(`${config.fullName}｜${config.title}\n${config.brand}\n${pageUrl}`)}`;
+  `https://line.me/R/msg/text/?${encodeURIComponent(`${config.content.fullName}｜${config.content.title}\n${config.content.brandName}\n${pageUrl}`)}`;
 
 const copyShareUrl = async (pageUrl: string): Promise<ShareResult> => {
   if (!navigator.clipboard?.writeText) {
@@ -134,8 +134,8 @@ export async function shareDigitalCard({
 
   if (navigator.share) {
     await navigator.share({
-      title: `${config.fullName}｜${config.brand}`,
-      text: `${config.title}\n${config.headline}`,
+      title: config.share.title ?? `${config.content.fullName}｜${config.content.brandName}`,
+      text: config.share.text ?? `${config.content.title}\n${config.content.headline}`,
       url: pageUrl,
     });
 

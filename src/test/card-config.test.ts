@@ -1,5 +1,6 @@
 import { cards, getCardBySlug } from '../content/cards';
 import { getCardLiffUrl, getCardShareUrl, getCardWebUrl } from '../lib/routes';
+import { buildCardActionItems } from '../lib/card-actions';
 
 describe('card collection', () => {
   it('loads required card fields', () => {
@@ -7,24 +8,26 @@ describe('card collection', () => {
 
     cards.forEach((card) => {
       expect(card.slug).toBeTruthy();
-      expect(card.brand).toBeTruthy();
-      expect(card.fullName).toBeTruthy();
-      expect(card.highlights.length).toBeGreaterThan(0);
-      expect(card.qrEnabled).toBeTypeOf('boolean');
+      expect(card.id).toBeTruthy();
+      expect(card.content.brandName).toBeTruthy();
+      expect(card.content.fullName).toBeTruthy();
+      expect(card.content.highlights.length).toBeGreaterThan(0);
+      expect(card.modules.showQrCode).toBeTypeOf('boolean');
     });
   });
 
   it('does not keep known placeholder urls in card actions', () => {
     cards.forEach((card) => {
-      expect(card.heroLink).not.toContain('example');
-      expect(card.contactAction.url).not.toContain('example');
-      expect(card.bookingAction.url).not.toContain('example');
+      expect(card.photo.link).not.toContain('example');
+      card.actions.forEach((action) => {
+        expect(action.url ?? '').not.toContain('example');
+      });
     });
   });
 
   it('finds cards by slug', () => {
-    expect(getCardBySlug('default')?.fullName).toBe('姓名');
-    expect(getCardBySlug('demo-consultant')?.fullName).toBe('姓名');
+    expect(getCardBySlug('default')?.content.fullName).toBe('姓名');
+    expect(getCardBySlug('demo-consultant')?.content.fullName).toBe('姓名');
     expect(getCardBySlug('missing-card')).toBeUndefined();
   });
 
@@ -35,7 +38,32 @@ describe('card collection', () => {
   });
 
   it('keeps the formal card theme stable', () => {
-    expect(getCardBySlug('default')?.theme).toBe('corporate');
-    expect(getCardBySlug('demo-consultant')?.theme).toBe('corporate');
+    expect(getCardBySlug('default')?.appearance.theme).toBe('executive');
+    expect(getCardBySlug('demo-consultant')?.appearance.theme).toBe('executive');
+  });
+
+  it('always appends the share action last', () => {
+    const card = getCardBySlug('default');
+
+    expect(card).toBeTruthy();
+
+    const actions = buildCardActionItems({
+      actions: [
+        ...(card?.actions ?? []),
+        {
+          id: 'hidden',
+          label: '隱藏按鈕',
+          enabled: false,
+        },
+      ],
+      fallbackUrl: 'https://example.test/card/default/',
+      onShare: () => undefined,
+    });
+
+    expect(actions.at(-1)).toMatchObject({
+      kind: 'button',
+      key: 'share',
+      label: '分享此電子名片給 LINE 好友',
+    });
   });
 });

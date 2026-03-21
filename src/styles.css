@@ -24,6 +24,12 @@
   --gold: #8e6c46;
   --gold-soft: #f5eee5;
   --slate: #9aa5b4;
+  --accent: #18365f;
+  --accent-soft: #edf3fb;
+  --accent-contrast: #ffffff;
+  --accent-secondary: #8e6c46;
+  --accent-secondary-soft: #f5eee5;
+  --hero-gradient: linear-gradient(140deg, rgba(17, 42, 74, 0.96) 0%, rgba(34, 66, 110, 0.92) 52%, rgba(142, 108, 70, 0.8) 100%);
 }
 
 * {
@@ -121,7 +127,13 @@ button:disabled {
 .headline {
   font-size: clamp(1.3rem, 3vw, 1.9rem);
   line-height: 1.2;
-  color: var(--navy);
+  color: var(--accent);
+}
+
+.subheadline {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--muted);
 }
 
 .intro,
@@ -137,8 +149,7 @@ button:disabled {
   min-height: 280px;
   overflow: hidden;
   border-radius: 28px;
-  background:
-    linear-gradient(140deg, rgba(17, 42, 74, 0.96) 0%, rgba(34, 66, 110, 0.92) 52%, rgba(142, 108, 70, 0.8) 100%);
+  background: var(--hero-gradient);
 }
 
 .hero-frame::after {
@@ -174,7 +185,7 @@ button:disabled {
 }
 
 .content-card-accent {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, var(--accent-soft) 100%);
 }
 
 .highlight-list {
@@ -200,6 +211,7 @@ button:disabled {
   height: 8px;
   border-radius: 999px;
   background: var(--gold);
+  background: var(--accent-secondary);
 }
 
 .feedback-message {
@@ -228,6 +240,10 @@ button:disabled {
   font-size: clamp(1.5rem, 3vw, 2.1rem);
   line-height: 1.12;
   letter-spacing: -0.03em;
+}
+
+.actions-copy {
+  margin-top: 10px;
 }
 
 .action-grid,
@@ -262,18 +278,18 @@ button:disabled {
 }
 
 .action-button-primary {
-  background: var(--navy);
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .action-button-secondary {
-  background: var(--navy-soft);
-  color: var(--navy);
+  background: var(--accent-soft);
+  color: var(--accent);
   border-color: rgba(24, 54, 95, 0.12);
 }
 
 .action-button-share {
-  background: linear-gradient(135deg, #1d6f4f 0%, #249b60 100%);
+  background: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent) 100%);
   color: #fff;
   width: 100%;
 }

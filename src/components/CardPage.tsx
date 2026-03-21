@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import QRCode from 'qrcode';
 import type { CardConfig } from '../content/cards/types';
-import { buildCardActionItems } from '../lib/card-actions';
+import { buildCardPageViewModel } from '../content/cards/view-model';
 import { ensureLogin, getConfiguredLiffId, initLiff, isInClient, isLoggedIn, isShareAvailable } from '../lib/liff';
-import { resolveActionUrl, toAssetUrl } from '../lib/runtime';
+import { toAssetUrl } from '../lib/runtime';
 import { getCardWebUrl } from '../lib/routes';
 import { applySeo } from '../lib/seo';
 import { shareDigitalCard } from '../lib/share';
@@ -30,9 +30,6 @@ export function CardPage({ config }: CardPageProps) {
   const [liffInitError, setLiffInitError] = useState<string | null>(null);
   const liffEnabled = Boolean(getConfiguredLiffId());
   const pageUrl = getCardWebUrl(config.slug);
-  const heroUrl = resolveActionUrl(config.heroLink, pageUrl);
-  const contactUrl = resolveActionUrl(config.contactAction.url, pageUrl);
-  const bookingUrl = resolveActionUrl(config.bookingAction.url, pageUrl);
 
   useEffect(() => {
     applySeo(config);
@@ -78,7 +75,7 @@ export function CardPage({ config }: CardPageProps) {
   }, []);
 
   useEffect(() => {
-    if (!config.qrEnabled) {
+    if (!config.modules.showQrCode) {
       return;
     }
 
@@ -106,7 +103,7 @@ export function CardPage({ config }: CardPageProps) {
     return () => {
       mounted = false;
     };
-  }, [config.qrEnabled, pageUrl]);
+  }, [config.modules.showQrCode, pageUrl]);
 
   const handleShare = async () => {
     setIsSharing(true);
@@ -146,10 +143,9 @@ export function CardPage({ config }: CardPageProps) {
     link.click();
   };
 
-  const actionItems = buildCardActionItems({
+  const viewModel = buildCardPageViewModel({
     config,
-    contactUrl,
-    bookingUrl,
+    pageUrl,
     onShare: handleShare,
     shareDisabled: isSharing,
   });
@@ -172,50 +168,59 @@ export function CardPage({ config }: CardPageProps) {
 
   return (
     <main className="page-shell">
-      <section className="card-surface">
-        <article className="identity-panel">
+      <section
+        className={`card-surface ${viewModel.appearance.cardSurfaceClassName}`}
+        style={viewModel.appearance.cssVariables as CSSProperties}
+      >
+        <article className={`identity-panel layout-${config.appearance.layout}`}>
           <div className="identity-copy">
-            <p className="eyebrow">{config.brand}</p>
-            <h1 className="person-name">{config.fullName}</h1>
-            <p className="person-title">{config.title}</p>
-            <p className="headline">{config.headline}</p>
-            <p className="intro">{config.intro}</p>
+            <p className="eyebrow">{viewModel.identity.brandName}</p>
+            <h1 className="person-name">{viewModel.identity.fullName}</h1>
+            <p className="person-title">{viewModel.identity.title}</p>
+            <p className="headline">{viewModel.summary.headline}</p>
+            <p className="subheadline">{viewModel.summary.subheadline}</p>
+            <p className="intro">{viewModel.summary.intro}</p>
           </div>
 
-          <a className="hero-frame" href={heroUrl} target="_blank" rel="noreferrer">
-            <img className="hero-image" src={toAssetUrl(config.heroImage)} alt={config.fullName} />
+          <a className="hero-frame" href={viewModel.photo.href} target="_blank" rel="noreferrer">
+            <img className="hero-image" src={toAssetUrl(viewModel.photo.src)} alt={viewModel.photo.alt} />
           </a>
         </article>
 
         <section className="content-grid">
-          <article className="content-card">
-            <p className="section-label">專業簡介</p>
-            <ul className="highlight-list">
-              {config.highlights.map((highlight) => (
-                <li key={highlight}>{highlight}</li>
-              ))}
-            </ul>
-          </article>
+          {viewModel.modules.showHighlights ? (
+            <article className="content-card">
+              <p className="section-label">{viewModel.highlights.title}</p>
+              <ul className="highlight-list">
+                {viewModel.highlights.items.map((highlight) => (
+                  <li key={highlight}>{highlight}</li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
 
-          <article className="content-card content-card-accent">
-            <p className="section-label">分享說明</p>
-            <p className="support-copy">{shareHint}</p>
-            {(shareMessage || shareError) && (
-              <p className={`feedback-message ${shareError ? 'is-error' : 'is-success'}`}>{shareError ?? shareMessage}</p>
-            )}
-          </article>
+          {viewModel.modules.showSharePanel ? (
+            <article className="content-card content-card-accent">
+              <p className="section-label">{viewModel.sharePanel.title}</p>
+              <p className="support-copy">{shareHint}</p>
+              {(shareMessage || shareError) && (
+                <p className={`feedback-message ${shareError ? 'is-error' : 'is-success'}`}>{shareError ?? shareMessage}</p>
+              )}
+            </article>
+          ) : null}
         </section>
 
         <section id="actions" className="actions-panel">
           <div className="actions-header">
             <div>
-              <p className="section-label">主要操作</p>
-              <h2 className="actions-title">保持正式、直接、可立即聯絡</h2>
+              <p className="section-label">{viewModel.actions.title}</p>
+              <h2 className="actions-title">{viewModel.summary.headline}</h2>
+              <p className="support-copy actions-copy">{viewModel.actions.description}</p>
             </div>
           </div>
 
           <div className="action-grid">
-            {actionItems.map((action) =>
+            {viewModel.actions.items.map((action) =>
               action.kind === 'link' ? (
                 <a
                   key={action.key}
@@ -241,13 +246,13 @@ export function CardPage({ config }: CardPageProps) {
           </div>
         </section>
 
-        {config.qrEnabled && qrDataUrl ? (
+        {viewModel.modules.showQrCode && qrDataUrl ? (
           <aside className="qr-panel">
             <div>
               <p className="section-label">名片 QR Code</p>
               <p className="support-copy">適合面對面交換資訊、簡報現場展示或印刷物延伸使用。</p>
             </div>
-            <img className="qr-image" src={qrDataUrl} alt={`${config.fullName} QR code`} />
+            <img className="qr-image" src={qrDataUrl} alt={`${viewModel.identity.fullName} QR code`} />
             <button type="button" className="action-button action-button-secondary qr-download" onClick={handleDownload}>
               下載 QR Code
             </button>

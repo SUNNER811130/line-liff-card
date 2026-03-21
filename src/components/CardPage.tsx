@@ -1,144 +1,38 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import type { CardConfig } from '../content/cards/types';
-import {
-  buildShareTargetUrl,
-  createPermanentLink,
-  ensureLogin,
-  getConfiguredLiffId,
-  getLineProfile,
-  initLiff,
-  isInClient,
-  isLoggedIn,
-  isShareAvailable,
-  shareCard,
-  type LineProfile,
-} from '../lib/liff';
-import { getAppMode, navigateToUrl, resolveActionUrl, toAssetUrl } from '../lib/runtime';
-import { getCardShareUrl, getCardWebUrl } from '../lib/routes';
+import { buildCardActionItems } from '../lib/card-actions';
+import { ensureLogin, getConfiguredLiffId, initLiff, isInClient, isLoggedIn, isShareAvailable } from '../lib/liff';
+import { resolveActionUrl, toAssetUrl } from '../lib/runtime';
+import { getCardWebUrl } from '../lib/routes';
 import { applySeo } from '../lib/seo';
+import { shareDigitalCard } from '../lib/share';
 
 type CardPageProps = {
   config: CardConfig;
 };
 
-const buttonEntries = (config: CardConfig) => [config.button1, config.button2, config.button3];
-
-const buildFlexMessage = (config: CardConfig, shareUrl: string, fallbackUrl: string) => ({
-  type: 'flex' as const,
-  altText: `${config.englishName} | ${config.heroTitle}`,
-  contents: {
-    type: 'bubble' as const,
-    hero: {
-      type: 'image' as const,
-      url: toAssetUrl(config.heroImage),
-      size: 'full' as const,
-      aspectRatio: '4:3' as const,
-      aspectMode: 'cover' as const,
-      action: {
-        type: 'uri' as const,
-        label: config.englishName,
-        uri: shareUrl,
-      },
-    },
-    body: {
-      type: 'box' as const,
-      layout: 'vertical' as const,
-      spacing: 'md' as const,
-      contents: [
-        {
-          type: 'text' as const,
-          text: config.brand,
-          size: 'xs' as const,
-          weight: 'bold' as const,
-          color: config.theme === 'corporate' ? '#284e86' : '#84514f',
-        },
-        {
-          type: 'text' as const,
-          text: config.mainTitle,
-          wrap: true,
-          weight: 'bold' as const,
-          size: 'xl' as const,
-          color: '#1e2530',
-        },
-        {
-          type: 'text' as const,
-          text: config.description,
-          wrap: true,
-          size: 'sm' as const,
-          color: '#596579',
-        },
-        {
-          type: 'separator' as const,
-          margin: 'md' as const,
-        },
-        {
-          type: 'text' as const,
-          text: shareUrl,
-          wrap: true,
-          size: 'xs' as const,
-          color: '#6e7888',
-        },
-      ],
-    },
-    footer: {
-      type: 'box' as const,
-      layout: 'vertical' as const,
-      spacing: 'sm' as const,
-      contents: buttonEntries(config).map((button) => ({
-        type: 'button' as const,
-        style: 'primary' as const,
-        color: button.color,
-        action: {
-          type: 'uri' as const,
-          label: button.label,
-          uri: resolveActionUrl(button.url, fallbackUrl),
-        },
-      })),
-    },
-  },
-});
-
-const themeCopy = {
-  corporate: {
-    sectionLabel: 'Enterprise Card',
-    qrTitle: 'Corporate Landing QR',
-    summaryLabel: 'Business Card System',
-  },
-  consultant: {
-    sectionLabel: 'Private Advisory Card',
-    qrTitle: 'Private Consultation QR',
-    summaryLabel: 'Consulting Signature Page',
-  },
+const shareHintByState = {
+  ready: '在 LINE 內可直接分享給好友，瀏覽器中則會自動改用相容分享流程。',
+  login: '請先登入 LINE，之後即可直接分享這張電子名片。',
+  fallback: '目前以網頁版顯示，分享時會自動切換到可用方式。',
 } as const;
 
 export function CardPage({ config }: CardPageProps) {
   const [qrDataUrl, setQrDataUrl] = useState('');
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const [shareState, setShareState] = useState<'idle' | 'shared' | 'failed'>('idle');
-  const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const [liffInitError, setLiffInitError] = useState<string | null>(null);
-  const [liffActionError, setLiffActionError] = useState<string | null>(null);
-  const [lineProfile, setLineProfile] = useState<LineProfile | null>(null);
-  const [profileHint, setProfileHint] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
   const [liffReady, setLiffReady] = useState(false);
   const [inClient, setInClient] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [shareAvailable, setShareAvailable] = useState(false);
+  const [liffInitError, setLiffInitError] = useState<string | null>(null);
   const liffEnabled = Boolean(getConfiguredLiffId());
   const pageUrl = getCardWebUrl(config.slug);
-  const liffUrl = getCardShareUrl(config.slug);
-  const shareUrl = liffUrl || pageUrl;
-  const connectUrl = resolveActionUrl(config.button1.url, pageUrl);
-  const overviewUrl = resolveActionUrl(config.button2.url, pageUrl);
-  const bookingUrl = resolveActionUrl(config.button3.url, pageUrl);
   const heroUrl = resolveActionUrl(config.heroLink, pageUrl);
-  const mode = getAppMode({
-    hasLiffId: liffEnabled,
-    inClient,
-    shareAvailable,
-    initFailed: Boolean(liffInitError),
-  });
+  const contactUrl = resolveActionUrl(config.contactAction.url, pageUrl);
+  const bookingUrl = resolveActionUrl(config.bookingAction.url, pageUrl);
 
   useEffect(() => {
     applySeo(config);
@@ -153,42 +47,27 @@ export function CardPage({ config }: CardPageProps) {
         return;
       }
 
-      if (result.status === 'error') {
-        setLiffInitError(result.message);
+      if (result.status !== 'ready') {
         setLiffReady(false);
-        setProfileHint('目前無法啟用 LINE 個人化資訊。');
+        setLiffInitError(result.status === 'error' ? result.message : null);
         return;
       }
 
-      if (result.status === 'disabled') {
-        setLiffReady(false);
-        setProfileHint('未設定 LIFF 時，頁面會以一般公開名片模式顯示。');
-        return;
-      }
-
-      const nextInClient = await isInClient();
-      const nextLoggedIn = await isLoggedIn();
-      const nextShareAvailable = await isShareAvailable();
-      const profileResult = await getLineProfile();
+      const [nextInClient, nextLoggedIn, nextShareAvailable] = await Promise.all([
+        isInClient(),
+        isLoggedIn(),
+        isShareAvailable(),
+      ]);
 
       if (!mounted) {
         return;
       }
 
-      setLiffInitError(null);
       setLiffReady(true);
+      setLiffInitError(null);
       setInClient(nextInClient);
       setLoggedIn(nextLoggedIn);
       setShareAvailable(nextShareAvailable);
-
-      if (profileResult.status === 'ready') {
-        setLineProfile(profileResult.profile);
-        setProfileHint(null);
-        return;
-      }
-
-      setLineProfile(null);
-      setProfileHint(nextInClient || nextLoggedIn ? profileResult.message : '目前未進入可讀取個人資料的 LINE 情境。');
     };
 
     void bootstrapLiff();
@@ -209,7 +88,7 @@ export function CardPage({ config }: CardPageProps) {
       width: 320,
       margin: 1,
       color: {
-        dark: config.theme === 'corporate' ? '#163863' : '#23493f',
+        dark: '#17355e',
         light: '#ffffff',
       },
     })
@@ -227,14 +106,32 @@ export function CardPage({ config }: CardPageProps) {
     return () => {
       mounted = false;
     };
-  }, [config.qrEnabled, config.theme, pageUrl]);
+  }, [config.qrEnabled, pageUrl]);
 
-  const handleCopy = async () => {
+  const handleShare = async () => {
+    setIsSharing(true);
+    setShareMessage(null);
+    setShareError(null);
+
+    if (inClient && liffEnabled && !loggedIn) {
+      void ensureLogin();
+      setIsSharing(false);
+      setShareError('請先登入 LINE 後再分享。');
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(pageUrl);
-      setCopyState('copied');
-    } catch {
-      setCopyState('failed');
+      const result = await shareDigitalCard({
+        config,
+        pageUrl,
+        inClient,
+        shareAvailable,
+      });
+      setShareMessage(result.message);
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '目前無法分享電子名片，請稍後再試。');
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -249,272 +146,113 @@ export function CardPage({ config }: CardPageProps) {
     link.click();
   };
 
-  const handleShare = async () => {
-    setShareState('idle');
-    setShareStatus(null);
-    setLiffActionError(null);
+  const actionItems = buildCardActionItems({
+    config,
+    contactUrl,
+    bookingUrl,
+    onShare: handleShare,
+    shareDisabled: isSharing,
+  });
 
-    if (inClient) {
-      if (!loggedIn) {
-        void ensureLogin();
-        setShareState('failed');
-        setLiffActionError('尚未登入 LINE，請先登入後再分享。');
-        return;
-      }
-
-      if (!shareAvailable) {
-        setShareState('failed');
-        setLiffActionError('目前 LINE 環境不支援 shareTargetPicker。');
-        return;
-      }
-
-      try {
-        const permanentLink = await createPermanentLink(pageUrl);
-        const shared = await shareCard([buildFlexMessage(config, permanentLink, pageUrl)]);
-        if (shared) {
-          setShareState('shared');
-          setShareStatus('已開啟 LINE 分享對象選擇器。');
-        } else {
-          setShareState('failed');
-          setLiffActionError('已取消分享，尚未送出給好友。');
-        }
-      } catch (error) {
-        setShareState('failed');
-        setLiffActionError(error instanceof Error ? error.message : '分享失敗，請稍後再試。');
-      }
-      return;
-    }
-
-    try {
-      navigateToUrl(await buildShareTargetUrl(pageUrl));
-      setShareStatus('正在切換到 LINE 開啟 LIFF 名片。');
-    } catch (error) {
-      setShareState('failed');
-      setLiffActionError(error instanceof Error ? error.message : '建立分享入口失敗。');
-    }
-  };
-
-  const mainAction = (() => {
-    if (!liffEnabled) {
-      return {
-        label: 'LIFF 尚未設定',
-        detail: '目前只提供公開網頁模式與 QR。',
-        disabled: true,
-        onClick: undefined,
-      };
-    }
-
+  const shareHint = (() => {
     if (inClient && loggedIn && shareAvailable) {
-      return {
-        label: '分享好友',
-        detail: '使用 shareTargetPicker 傳送這張名片。',
-        disabled: false,
-        onClick: handleShare,
-      };
+      return shareHintByState.ready;
     }
 
-    if (inClient && !loggedIn) {
-      return {
-        label: '請先登入 LINE',
-        detail: '登入後即可使用分享好友與個人化資料。',
-        disabled: false,
-        onClick: () => {
-          void ensureLogin();
-        },
-      };
-    }
-
-    return {
-      label: '在 LINE 中開啟名片',
-        detail: '外部瀏覽器會改導向 card-specific LIFF URL，避免回跳列表。',
-        disabled: false,
-        onClick: () => {
-          navigateToUrl(shareUrl);
-        },
-      };
-  })();
-
-  const operationalStatus = (() => {
-    if (!liffEnabled) {
-      return '目前以公開網頁模式展示。';
+    if (inClient && liffReady && !loggedIn) {
+      return shareHintByState.login;
     }
 
     if (liffInitError) {
-      return 'LIFF 初始化失敗，請改由正式 LIFF URL 開啟。';
+      return shareHintByState.fallback;
     }
 
-    if (!inClient) {
-      return '目前為外部瀏覽器模式，可檢視內容、複製網址或切回 LINE。';
-    }
-
-    if (!loggedIn) {
-      return '已在 LINE 內，但尚未登入 LINE 帳號。';
-    }
-
-    if (!shareAvailable) {
-      return '已在 LINE 內，但目前容器不支援 shareTargetPicker。';
-    }
-
-    return '目前可直接分享好友，且已保留 LIFF 個人化資訊顯示。';
+    return liffEnabled ? shareHintByState.fallback : '目前可作為正式電子名片頁使用，之後可再補上 LINE 分享設定。';
   })();
 
   return (
-    <main className={`page-shell theme-${config.theme}`}>
-      <section className={`card-layout card-layout-${config.theme}`}>
-        <article className={`card-panel card-panel-${config.theme}`} data-theme={config.theme}>
-          <div className="media-column">
-            <a className="hero-link" href={heroUrl} target="_blank" rel="noreferrer">
-              <img className="hero-image" src={toAssetUrl(config.heroImage)} alt={config.englishName} />
-            </a>
-            <div className="media-overlay">
-              <span className="media-badge">{themeCopy[config.theme].sectionLabel}</span>
-              <div className="media-summary">
-                <p className="media-summary-label">{themeCopy[config.theme].summaryLabel}</p>
-                <p className="media-summary-title">{config.shortTagline}</p>
-              </div>
-            </div>
+    <main className="page-shell">
+      <section className="card-surface">
+        <article className="identity-panel">
+          <div className="identity-copy">
+            <p className="eyebrow">{config.brand}</p>
+            <h1 className="person-name">{config.fullName}</h1>
+            <p className="person-title">{config.title}</p>
+            <p className="headline">{config.headline}</p>
+            <p className="intro">{config.intro}</p>
           </div>
 
-          <div className="content-column">
-            <div className="topline">
-              <span className="brand-chip">{config.brand}</span>
-              <span className={`mode-chip mode-${mode.toLowerCase()}`}>{mode}</span>
-            </div>
-
-            <p className="english-name">{config.englishName}</p>
-            <h1 className="hero-title">{config.heroTitle}</h1>
-            <p className="main-title">{config.mainTitle}</p>
-            <p className="description">{config.description}</p>
-
-            <section className="profile-panel">
-              <div className="profile-panel-header">
-                <p className="profile-panel-title">LIFF badge / 狀態區</p>
-              </div>
-              {lineProfile ? (
-                <div className="profile-card">
-                  {lineProfile.pictureUrl ? (
-                    <img className="profile-avatar" src={lineProfile.pictureUrl} alt={lineProfile.displayName} />
-                  ) : (
-                    <div className="profile-avatar profile-avatar-fallback">{lineProfile.displayName.slice(0, 1)}</div>
-                  )}
-                  <div className="profile-copy">
-                    <p className="profile-label">目前登入 LINE 使用者</p>
-                    <p className="profile-name">{lineProfile.displayName}</p>
-                    <p className="profile-note">個人化顯示已啟用，分享時仍維持卡片版面。</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="profile-note">{profileHint ?? '目前未顯示個人化資訊。'}</p>
-              )}
-            </section>
-
-            <div className="status-strip" aria-live="polite">
-              <span className="status-strip-label">Status</span>
-              <p className="status-strip-text">{operationalStatus}</p>
-            </div>
-
-            <section id="overview" className="info-block">
-              <p className="section-heading">Overview</p>
-              <ul className="bullet-list">
-                {config.bullets.map((bullet) => (
-                  <li key={bullet}>{bullet}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section id="connect" className="action-block">
-              <div className="action-block-header">
-                <p className="section-heading">主操作區</p>
-                <p className="action-block-copy">保留分享好友、品牌導流與公開網址 fallback。</p>
-              </div>
-              <div className="button-grid">
-                {[{ ...config.button1, url: connectUrl }, { ...config.button2, url: overviewUrl }, { ...config.button3, url: bookingUrl }].map((button) => (
-                  <a
-                    key={button.label}
-                    className={`cta-button cta-button-${config.theme}`}
-                    href={button.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ backgroundColor: button.color }}
-                  >
-                    {button.label}
-                  </a>
-                ))}
-              </div>
-            </section>
-
-            <section id="booking" className="liff-panel">
-              <div className="liff-panel-header">
-                <div>
-                  <p className="liff-panel-title">Main Action</p>
-                  <p className="liff-panel-subtitle">LINE 內與外部瀏覽器分開處理，但都維持同一張卡的正式入口。</p>
-                </div>
-                <span className={`liff-status-chip ${liffReady ? 'is-ready' : 'is-pending'}`}>
-                  {liffReady ? 'ready' : 'standby'}
-                </span>
-              </div>
-
-              <div className="liff-action-card">
-                <p className="liff-action-eyebrow">分享行為</p>
-                <h2 className="liff-action-title">{mainAction.label}</h2>
-                <p className="liff-message">{mainAction.detail}</p>
-                <button
-                  type="button"
-                  className={`utility-button utility-button-liff utility-button-${config.theme}`}
-                  onClick={mainAction.onClick}
-                  disabled={mainAction.disabled}
-                >
-                  {mainAction.label}
-                </button>
-              </div>
-
-              {liffActionError && <p className="liff-message liff-message-error">{liffActionError}</p>}
-              {shareStatus && (
-                <p className={`liff-message ${shareState === 'shared' ? 'liff-message-success' : ''}`}>{shareStatus}</p>
-              )}
-            </section>
-          </div>
+          <a className="hero-frame" href={heroUrl} target="_blank" rel="noreferrer">
+            <img className="hero-image" src={toAssetUrl(config.heroImage)} alt={config.fullName} />
+          </a>
         </article>
 
-        <aside className={`qr-panel qr-panel-${config.theme}`}>
-          <section className="qr-card">
-            <p className="qr-label">{themeCopy[config.theme].qrTitle}</p>
-            <h2 className="qr-title">Public URL</h2>
-            <p className="public-url">{pageUrl}</p>
-            <div className="utility-actions">
-              <button type="button" className="utility-button utility-button-secondary" onClick={handleCopy}>
-                {copyState === 'copied' ? '已複製公開網址' : copyState === 'failed' ? '複製失敗，請重試' : '複製公開網址'}
-              </button>
-              <button type="button" className="utility-button utility-button-secondary" onClick={handleShare}>
-                {inClient ? '分享好友' : '切到 LINE 開啟'}
-              </button>
-            </div>
-          </section>
+        <section className="content-grid">
+          <article className="content-card">
+            <p className="section-label">專業簡介</p>
+            <ul className="highlight-list">
+              {config.highlights.map((highlight) => (
+                <li key={highlight}>{highlight}</li>
+              ))}
+            </ul>
+          </article>
 
-          <section className="link-matrix">
-            <div>
-              <p className="qr-label">Web URL</p>
-              <p className="link-matrix-value">{pageUrl}</p>
-            </div>
-            <div>
-              <p className="qr-label">LIFF URL</p>
-              <p className="link-matrix-value">{liffUrl || '未設定 LIFF ID'}</p>
-            </div>
-            <div>
-              <p className="qr-label">Share URL</p>
-              <p className="link-matrix-value">{shareUrl}</p>
-            </div>
-          </section>
+          <article className="content-card content-card-accent">
+            <p className="section-label">分享說明</p>
+            <p className="support-copy">{shareHint}</p>
+            {(shareMessage || shareError) && (
+              <p className={`feedback-message ${shareError ? 'is-error' : 'is-success'}`}>{shareError ?? shareMessage}</p>
+            )}
+          </article>
+        </section>
 
-          {config.qrEnabled && qrDataUrl ? (
-            <section className="qr-card">
-              <img className="qr-image" src={qrDataUrl} alt={`${config.englishName} QR code`} />
-              <button type="button" className="utility-button utility-button-secondary" onClick={handleDownload}>
-                下載 QR Code
-              </button>
-            </section>
-          ) : null}
-        </aside>
+        <section id="actions" className="actions-panel">
+          <div className="actions-header">
+            <div>
+              <p className="section-label">主要操作</p>
+              <h2 className="actions-title">保持正式、直接、可立即聯絡</h2>
+            </div>
+          </div>
+
+          <div className="action-grid">
+            {actionItems.map((action) =>
+              action.kind === 'link' ? (
+                <a
+                  key={action.key}
+                  className={`action-button action-button-${action.tone}`}
+                  href={action.href}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {action.label}
+                </a>
+              ) : (
+                <button
+                  key={action.key}
+                  type="button"
+                  className="action-button action-button-share"
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                >
+                  {isSharing ? '分享中...' : action.label}
+                </button>
+              ),
+            )}
+          </div>
+        </section>
+
+        {config.qrEnabled && qrDataUrl ? (
+          <aside className="qr-panel">
+            <div>
+              <p className="section-label">名片 QR Code</p>
+              <p className="support-copy">適合面對面交換資訊、簡報現場展示或印刷物延伸使用。</p>
+            </div>
+            <img className="qr-image" src={qrDataUrl} alt={`${config.fullName} QR code`} />
+            <button type="button" className="action-button action-button-secondary qr-download" onClick={handleDownload}>
+              下載 QR Code
+            </button>
+          </aside>
+        ) : null}
       </section>
     </main>
   );

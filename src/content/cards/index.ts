@@ -1,10 +1,11 @@
 import { defaultCard } from './default';
-import { demoConsultantCard } from './demo-consultant';
 import type { CardConfig } from './types';
 
-export const cards: CardConfig[] = [defaultCard, demoConsultantCard];
+const legacySlugs = new Set(['demo-consultant']);
 
-export const defaultCardSlug = defaultCard.slug;
+export const primaryCard: CardConfig = defaultCard;
+export const cards: CardConfig[] = [primaryCard];
+export const defaultCardSlug = primaryCard.slug;
 
 export const getCardBySlug = (slug: string): CardConfig | undefined =>
-  cards.find((card) => card.slug === slug);
+  cards.find((card) => card.slug === slug) ?? (legacySlugs.has(slug) ? primaryCard : undefined);

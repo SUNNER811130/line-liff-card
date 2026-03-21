@@ -1,6 +1,5 @@
-export type CardButton = {
+export type CardLinkAction = {
   label: string;
-  color: string;
   url: string;
 };
 
@@ -8,17 +7,15 @@ export type CardConfig = {
   slug: string;
   theme: 'corporate' | 'consultant';
   brand: string;
-  englishName: string;
-  shortTagline: string;
-  heroTitle: string;
-  mainTitle: string;
-  description: string;
-  bullets: string[];
+  fullName: string;
+  title: string;
+  headline: string;
+  intro: string;
+  highlights: string[];
   heroImage: string;
   heroLink: string;
-  button1: CardButton;
-  button2: CardButton;
-  button3: CardButton;
+  contactAction: CardLinkAction;
+  bookingAction: CardLinkAction;
   qrEnabled: boolean;
   seo: {
     title: string;

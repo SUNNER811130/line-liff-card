@@ -16,8 +16,8 @@ export type LiffInitResult =
 let initPromise: Promise<LiffInitResult> | null = null;
 let lastInitResult: LiffInitResult | null = null;
 
-const getConfiguredLiffId = () => import.meta.env.VITE_LIFF_ID?.trim();
-const getConfiguredSiteUrl = () => import.meta.env.VITE_SITE_URL?.trim();
+export const getConfiguredLiffId = () => import.meta.env.VITE_LIFF_ID?.trim();
+export const getConfiguredSiteUrl = () => import.meta.env.VITE_SITE_URL?.trim();
 
 const hasWindow = () => typeof window !== 'undefined';
 
@@ -45,6 +45,14 @@ const getEndpointUrl = (): URL | null => {
   } catch {
     return null;
   }
+};
+
+export const getExpectedEndpoint = (): string =>
+  getEndpointUrl()?.toString() ?? '未設定 VITE_SITE_URL';
+
+export const getLiffEntryUrl = (): string => {
+  const liffId = getConfiguredLiffId();
+  return liffId ? `https://liff.line.me/${liffId}` : '';
 };
 
 const isUnderEndpointUrl = (target: URL, endpoint: URL): boolean =>
@@ -168,6 +176,20 @@ export async function createPermanentLink(url?: string): Promise<string> {
   assertUrlWithinEndpoint(targetUrl);
 
   return liff.permanentLink.createUrlBy(toUrl(targetUrl).toString());
+}
+
+export async function buildShareTargetUrl(url?: string): Promise<string> {
+  const targetUrl = url ?? (hasWindow() ? window.location.href : '');
+
+  if (!getConfiguredLiffId()) {
+    return targetUrl;
+  }
+
+  try {
+    return await createPermanentLink(targetUrl);
+  } catch {
+    return getLiffEntryUrl() || targetUrl;
+  }
 }
 
 export function __resetLiffForTests() {

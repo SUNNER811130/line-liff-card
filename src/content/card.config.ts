@@ -30,10 +30,10 @@ export const cardConfig: CardConfig = {
   brand: 'LINE LIFF CARD',
   englishName: 'Alex Chen',
   heroTitle: 'Smart Business Profile',
-  mainTitle: '把聯絡方式、服務亮點與行動入口整合成一張正式可分享的電子名片',
+  mainTitle: '把聯絡方式、服務亮點與行動入口整合成一張正式可分享的商務電子名片',
   description:
-    '這是一個可部署到 GitHub Pages 的 LINE 電子名片 v1 靜態站。內容集中在本地設定檔，適合先快速上線展示，再視需求接上 LIFF 或後端服務。',
-  bullets: ['手機優先閱讀體驗', '可快速替換文案與圖片', '支援公開網址 QR 與複製分享'],
+    '這是一張可直接部署到 GitHub Pages 的商務電子名片，兼顧正式形象、行動導流與 LIFF 分享流程，適合作為對外聯絡與品牌介紹入口。',
+  bullets: ['手機優先閱讀體驗', '可快速替換文案與圖片', '支援公開網址 QR 與 LINE 內分享'],
   heroImage: 'images/hero-placeholder.svg',
   heroLink: 'https://example.com',
   button1: {

@@ -2,7 +2,18 @@ import { useEffect, useState } from 'react';
 import liff from '@line/liff';
 import QRCode from 'qrcode';
 import type { CardConfig } from '../content/card.config';
-import { createPermanentLink, ensureLogin, initLiff, isInClient, isLoggedIn, isShareAvailable } from '../lib/liff';
+import {
+  buildShareTargetUrl,
+  createPermanentLink,
+  ensureLogin,
+  getConfiguredLiffId,
+  getExpectedEndpoint,
+  getLiffEntryUrl,
+  initLiff,
+  isInClient,
+  isLoggedIn,
+  isShareAvailable,
+} from '../lib/liff';
 import { getAppMode, getPublicPageUrl, toAssetUrl } from '../lib/runtime';
 import { applySeo } from '../lib/seo';
 
@@ -98,11 +109,17 @@ export function CardPage({ config }: CardPageProps) {
   const [inClient, setInClient] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [shareAvailable, setShareAvailable] = useState(false);
-  const mode = getAppMode();
+  const [expectedEndpoint, setExpectedEndpoint] = useState(getExpectedEndpoint());
   const pageUrl = getPublicPageUrl();
-  const liffEnabled = Boolean(import.meta.env.VITE_LIFF_ID?.trim());
-  const canShowShareButton = liffEnabled && (inClient ? shareAvailable : liffReady);
-  const shareButtonLabel = inClient ? '分享好友' : '複製 LIFF 分享連結';
+  const liffId = getConfiguredLiffId();
+  const liffEnabled = Boolean(liffId);
+  const liffEntryUrl = getLiffEntryUrl();
+  const mode = getAppMode({
+    hasLiffId: liffEnabled,
+    inClient,
+    shareAvailable,
+    initFailed: Boolean(liffInitError),
+  });
 
   useEffect(() => {
     applySeo(config);
@@ -112,6 +129,7 @@ export function CardPage({ config }: CardPageProps) {
     let mounted = true;
 
     const bootstrapLiff = async () => {
+      setExpectedEndpoint(getExpectedEndpoint());
       const result = await initLiff();
       if (!mounted) {
         return;
@@ -129,6 +147,9 @@ export function CardPage({ config }: CardPageProps) {
       if (result.status === 'disabled') {
         setLiffReady(false);
         setLiffInitError(null);
+        setInClient(false);
+        setLoggedIn(false);
+        setShareAvailable(false);
         return;
       }
 
@@ -193,9 +214,14 @@ export function CardPage({ config }: CardPageProps) {
 
       try {
         const permanentLink = await createPermanentLink(pageUrl);
-        await liff.shareTargetPicker([buildFlexMessage(config, permanentLink)]);
-        setShareState('shared');
-        setShareStatus('已開啟 LINE 分享對象選擇器。');
+        const shareResult = await liff.shareTargetPicker([buildFlexMessage(config, permanentLink)]);
+        if (shareResult) {
+          setShareState('shared');
+          setShareStatus('已開啟 LINE 分享對象選擇器。');
+        } else {
+          setShareState('failed');
+          setLiffActionError('已取消分享，尚未送出給好友。');
+        }
       } catch (error) {
         setShareState('failed');
         setLiffActionError(
@@ -206,10 +232,9 @@ export function CardPage({ config }: CardPageProps) {
     }
 
     try {
-      const permanentLink = await createPermanentLink(pageUrl);
-      await navigator.clipboard.writeText(permanentLink);
-      setShareState('copied');
-      setShareStatus('LIFF permanent link 已複製。');
+      const shareUrl = await buildShareTargetUrl(pageUrl);
+      window.location.assign(shareUrl);
+      setShareStatus('正在切換到 LINE 開啟 LIFF。');
     } catch (error) {
       setShareState('failed');
       setLiffActionError(
@@ -229,6 +254,68 @@ export function CardPage({ config }: CardPageProps) {
     link.click();
   };
 
+  const mainAction = (() => {
+    if (!liffEnabled) {
+      return {
+        heading: 'LIFF 尚未設定',
+        detail: '目前尚未設定 LIFF ID，頁面只會以一般網頁模式顯示。',
+        buttonLabel: 'LIFF 尚未設定',
+        disabled: true,
+        onClick: undefined,
+      };
+    }
+
+    if (liffInitError) {
+      return {
+        heading: 'LIFF 初始化失敗',
+        detail: liffInitError,
+        buttonLabel: '請用 LINE 開啟',
+        disabled: !liffEntryUrl,
+        onClick: liffEntryUrl ? () => window.location.assign(liffEntryUrl) : undefined,
+      };
+    }
+
+    if (!inClient) {
+      return {
+        heading: '請在 LINE 中開啟',
+        detail: '目前為外部瀏覽器，請改由 LINE 開啟 LIFF 才能進一步使用分享能力。',
+        buttonLabel: '請用 LINE 開啟',
+        disabled: !liffEntryUrl,
+        onClick: liffEntryUrl ? () => window.location.assign(liffEntryUrl) : undefined,
+      };
+    }
+
+    if (!loggedIn) {
+      return {
+        heading: '請先登入 LINE',
+        detail: 'LIFF 已啟動，但目前尚未登入 LINE 帳號。',
+        buttonLabel: '請先登入 LINE',
+        disabled: false,
+        onClick: () => {
+          ensureLogin();
+        },
+      };
+    }
+
+    if (!shareAvailable) {
+      return {
+        heading: '目前環境不支援分享',
+        detail: '此 LINE 版本或容器不支援 shareTargetPicker，名片仍可正常瀏覽。',
+        buttonLabel: '目前環境不支援分享',
+        disabled: true,
+        onClick: undefined,
+      };
+    }
+
+    return {
+      heading: '可分享好友',
+      detail: '將以 Flex Message 開啟好友分享選擇器。',
+      buttonLabel: '分享好友',
+      disabled: false,
+      onClick: handleShareAction,
+    };
+  })();
+
   return (
     <main className="page-shell">
       <section className="card-layout">
@@ -242,7 +329,7 @@ export function CardPage({ config }: CardPageProps) {
           <div className="content-column">
             <div className="topline">
               <span className="brand-chip">{config.brand}</span>
-              <span className={`mode-chip mode-${mode}`}>{mode}</span>
+              <span className={`mode-chip mode-${mode.toLowerCase()}`}>{mode}</span>
             </div>
 
             <p className="english-name">{config.englishName}</p>
@@ -271,61 +358,58 @@ export function CardPage({ config }: CardPageProps) {
               ))}
             </div>
 
-            {liffEnabled && (
-              <section className="liff-panel">
-                <div className="liff-panel-header">
-                  <p className="liff-panel-title">LINE LIFF</p>
-                  <span className={`liff-status-chip ${liffReady ? 'is-ready' : 'is-pending'}`}>
-                    {liffReady ? 'ready' : 'standby'}
-                  </span>
+            <section className="liff-panel">
+              <div className="liff-panel-header">
+                <p className="liff-panel-title">LINE LIFF</p>
+                <span className={`liff-status-chip ${liffReady ? 'is-ready' : 'is-pending'}`}>
+                  {liffReady ? 'ready' : 'standby'}
+                </span>
+              </div>
+
+              <div className="liff-action-card">
+                <p className="liff-action-eyebrow">主操作</p>
+                <h3 className="liff-action-title">{mainAction.heading}</h3>
+                <p className="liff-message">{mainAction.detail}</p>
+                <button
+                  type="button"
+                  className={`utility-button utility-button-liff ${mainAction.disabled ? 'is-disabled' : ''}`}
+                  onClick={mainAction.onClick}
+                  disabled={mainAction.disabled}
+                >
+                  {mainAction.buttonLabel}
+                </button>
+              </div>
+
+              {liffActionError && <p className="liff-message liff-message-error">{liffActionError}</p>}
+              {shareStatus && <p className="liff-message liff-message-success">{shareStatus}</p>}
+
+              <dl className="liff-debug-panel">
+                <div>
+                  <dt>hasLiffId</dt>
+                  <dd>{String(liffEnabled)}</dd>
                 </div>
-
-                {liffInitError && <p className="liff-message liff-message-error">LIFF init 失敗：{liffInitError}</p>}
-                {!liffInitError && liffReady && !loggedIn && (
-                  <p className="liff-message liff-message-error">未登入 LINE，無法執行分享。</p>
-                )}
-                {!liffInitError && inClient && !shareAvailable && (
-                  <p className="liff-message liff-message-error">
-                    shareTargetPicker unavailable，請改用支援版本的 LINE App。
-                  </p>
-                )}
-                {liffActionError && (
-                  <p className="liff-message liff-message-error">{liffActionError}</p>
-                )}
-                {shareStatus && <p className="liff-message liff-message-success">{shareStatus}</p>}
-
-                {canShowShareButton && (
-                  <button
-                    type="button"
-                    className="utility-button utility-button-liff"
-                    onClick={handleShareAction}
-                  >
-                    {shareButtonLabel}
-                  </button>
-                )}
-
-                {import.meta.env.DEV && (
-                  <dl className="liff-debug-panel">
-                    <div>
-                      <dt>inClient</dt>
-                      <dd>{String(inClient)}</dd>
-                    </div>
-                    <div>
-                      <dt>loggedIn</dt>
-                      <dd>{String(loggedIn)}</dd>
-                    </div>
-                    <div>
-                      <dt>shareAvailable</dt>
-                      <dd>{String(shareAvailable)}</dd>
-                    </div>
-                    <div>
-                      <dt>current URL</dt>
-                      <dd>{pageUrl}</dd>
-                    </div>
-                  </dl>
-                )}
-              </section>
-            )}
+                <div>
+                  <dt>inClient</dt>
+                  <dd>{String(inClient)}</dd>
+                </div>
+                <div>
+                  <dt>loggedIn</dt>
+                  <dd>{String(loggedIn)}</dd>
+                </div>
+                <div>
+                  <dt>shareAvailable</dt>
+                  <dd>{String(shareAvailable)}</dd>
+                </div>
+                <div>
+                  <dt>currentUrl</dt>
+                  <dd>{pageUrl}</dd>
+                </div>
+                <div>
+                  <dt>expectedEndpoint</dt>
+                  <dd>{expectedEndpoint}</dd>
+                </div>
+              </dl>
+            </section>
           </div>
         </div>
 

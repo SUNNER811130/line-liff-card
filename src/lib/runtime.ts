@@ -1,9 +1,37 @@
-export const getLiffId = (): string | undefined => import.meta.env.VITE_LIFF_ID;
+export const getLiffId = (): string | undefined => import.meta.env.VITE_LIFF_ID?.trim() || undefined;
 
-export const getAppMode = (): 'web-preview' | 'liff-ready' =>
-  getLiffId() ? 'liff-ready' : 'web-preview';
+export type AppMode = 'WEB-PREVIEW' | 'LIFF-READY' | 'IN-LIFF' | 'SHARE-AVAILABLE';
 
-export const getPublicPageUrl = (): string => window.location.href;
+type AppModeInput = {
+  hasLiffId: boolean;
+  inClient: boolean;
+  shareAvailable: boolean;
+  initFailed?: boolean;
+};
+
+export const getAppMode = ({
+  hasLiffId,
+  inClient,
+  shareAvailable,
+  initFailed = false,
+}: AppModeInput): AppMode => {
+  if (!hasLiffId || initFailed) {
+    return 'WEB-PREVIEW';
+  }
+
+  if (shareAvailable) {
+    return 'SHARE-AVAILABLE';
+  }
+
+  if (inClient) {
+    return 'IN-LIFF';
+  }
+
+  return 'LIFF-READY';
+};
+
+export const getPublicPageUrl = (): string =>
+  typeof window === 'undefined' ? '' : window.location.href;
 
 export const toAssetUrl = (assetPath: string): string => {
   if (/^(https?:)?\/\//.test(assetPath)) {

@@ -122,6 +122,18 @@ button {
   border-color: #92e2be;
 }
 
+.mode-in-liff {
+  color: #07503f;
+  background: #dbfff2;
+  border-color: #7dd7b0;
+}
+
+.mode-share-available {
+  color: #0c336e;
+  background: #e5f0ff;
+  border-color: #9dc0ff;
+}
+
 .english-name {
   margin: 0 0 8px;
   color: #61708a;
@@ -309,6 +321,7 @@ button {
 .liff-message {
   margin: 14px 0 0;
   font-size: 0.94rem;
+  color: #41516d;
 }
 
 .liff-message-error {
@@ -325,6 +338,29 @@ button {
   margin: 16px 0 0;
   padding-top: 16px;
   border-top: 1px solid rgba(18, 48, 95, 0.08);
+}
+
+.liff-action-card {
+  margin-top: 16px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(18, 48, 95, 0.08);
+  border-radius: 18px;
+}
+
+.liff-action-eyebrow {
+  margin: 0;
+  color: #61708a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.liff-action-title {
+  margin: 10px 0 0;
+  color: #162033;
+  font-size: 1.3rem;
 }
 
 .liff-debug-panel div {
@@ -344,6 +380,12 @@ button {
   margin: 0;
   color: #162033;
   word-break: break-all;
+}
+
+.utility-button.is-disabled {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+  cursor: not-allowed;
+  opacity: 0.9;
 }
 
 @media (min-width: 900px) {

@@ -35,6 +35,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify production env
+        run: |
+          test -f .env.production
+          grep -q '^VITE_LIFF_ID=' .env.production
+          grep -q '^VITE_SITE_URL=' .env.production
+
+      - name: Run lint
+        run: npm run lint
+
       - name: Run unit tests
         run: npm test
 

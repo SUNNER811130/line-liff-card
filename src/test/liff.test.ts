@@ -50,4 +50,15 @@ describe('liff helpers', () => {
       '目前頁面不在 LIFF Endpoint URL 範圍內',
     );
   });
+
+  it('falls back to LIFF entry url when permanent link creation fails', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+    liffMock.permanentLink.createUrlBy.mockRejectedValueOnce(new Error('boom'));
+
+    const { __resetLiffForTests, buildShareTargetUrl } = await import('../lib/liff');
+    __resetLiffForTests();
+
+    await expect(buildShareTargetUrl()).resolves.toBe('https://liff.line.me/test-liff-id');
+  });
 });

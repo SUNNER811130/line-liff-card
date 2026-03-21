@@ -14,7 +14,7 @@ import {
   isLoggedIn,
   isShareAvailable,
 } from '../lib/liff';
-import { getAppMode, getPublicPageUrl, toAssetUrl } from '../lib/runtime';
+import { getAppMode, getPublicPageUrl, resolveActionUrl, toAssetUrl } from '../lib/runtime';
 import { applySeo } from '../lib/seo';
 
 type CardPageProps = {
@@ -23,7 +23,7 @@ type CardPageProps = {
 
 const buttonEntries = (config: CardConfig) => [config.button1, config.button2, config.button3];
 
-const buildFlexMessage = (config: CardConfig, shareUrl: string) => ({
+const buildFlexMessage = (config: CardConfig, shareUrl: string, fallbackUrl: string) => ({
   type: 'flex' as const,
   altText: `${config.englishName} | ${config.heroTitle}`,
   contents: {
@@ -37,7 +37,7 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string) => ({
       action: {
         type: 'uri' as const,
         label: config.englishName,
-        uri: config.heroLink,
+        uri: resolveActionUrl(config.heroLink, fallbackUrl),
       },
     },
     body: {
@@ -91,7 +91,7 @@ const buildFlexMessage = (config: CardConfig, shareUrl: string) => ({
         action: {
           type: 'uri' as const,
           label: button.label,
-          uri: button.url,
+          uri: resolveActionUrl(button.url, fallbackUrl),
         },
       })),
     },
@@ -114,6 +114,10 @@ export function CardPage({ config }: CardPageProps) {
   const liffId = getConfiguredLiffId();
   const liffEnabled = Boolean(liffId);
   const liffEntryUrl = getLiffEntryUrl();
+  const connectUrl = resolveActionUrl(config.button1.url, liffEntryUrl || pageUrl || expectedEndpoint);
+  const overviewUrl = resolveActionUrl(config.button2.url, pageUrl || expectedEndpoint);
+  const bookingUrl = resolveActionUrl(config.button3.url, pageUrl || expectedEndpoint);
+  const heroUrl = resolveActionUrl(config.heroLink, pageUrl || expectedEndpoint);
   const mode = getAppMode({
     hasLiffId: liffEnabled,
     inClient,
@@ -214,7 +218,7 @@ export function CardPage({ config }: CardPageProps) {
 
       try {
         const permanentLink = await createPermanentLink(pageUrl);
-        const shareResult = await liff.shareTargetPicker([buildFlexMessage(config, permanentLink)]);
+        const shareResult = await liff.shareTargetPicker([buildFlexMessage(config, permanentLink, pageUrl)]);
         if (shareResult) {
           setShareState('shared');
           setShareStatus('已開啟 LINE 分享對象選擇器。');
@@ -321,7 +325,7 @@ export function CardPage({ config }: CardPageProps) {
       <section className="card-layout">
         <div className="card-panel">
           <div className="media-column">
-            <a className="hero-link" href={config.heroLink} target="_blank" rel="noreferrer">
+            <a className="hero-link" href={heroUrl} target="_blank" rel="noreferrer">
               <img className="hero-image" src={toAssetUrl(config.heroImage)} alt={config.englishName} />
             </a>
           </div>
@@ -334,7 +338,7 @@ export function CardPage({ config }: CardPageProps) {
 
             <p className="english-name">{config.englishName}</p>
             <h1 className="hero-title">{config.heroTitle}</h1>
-            <h2 className="main-title">{config.mainTitle}</h2>
+            <h2 id="overview" className="main-title">{config.mainTitle}</h2>
             <p className="description">{config.description}</p>
 
             <ul className="bullet-list">
@@ -343,8 +347,8 @@ export function CardPage({ config }: CardPageProps) {
               ))}
             </ul>
 
-            <div className="button-grid">
-              {buttonEntries(config).map((button) => (
+            <div id="connect" className="button-grid">
+              {[{ ...config.button1, url: connectUrl }, { ...config.button2, url: overviewUrl }, { ...config.button3, url: bookingUrl }].map((button) => (
                 <a
                   key={button.label}
                   className="cta-button"
@@ -358,7 +362,7 @@ export function CardPage({ config }: CardPageProps) {
               ))}
             </div>
 
-            <section className="liff-panel">
+            <section id="booking" className="liff-panel">
               <div className="liff-panel-header">
                 <p className="liff-panel-title">LINE LIFF</p>
                 <span className={`liff-status-chip ${liffReady ? 'is-ready' : 'is-pending'}`}>

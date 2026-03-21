@@ -38,8 +38,8 @@ describe('App', () => {
   it('renders three action buttons', () => {
     render(<App />);
 
-    expect(screen.getByRole('link', { name: '加入 LINE' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '官方網站' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '加入 LINE / 品牌入口' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '服務介紹' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '預約洽詢' })).toBeInTheDocument();
   });
 
@@ -77,5 +77,28 @@ describe('App', () => {
       expect(screen.getByText('IN-LIFF')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '目前環境不支援分享' })).toBeDisabled();
     });
+  });
+
+  it('shows login action when LIFF is in client but user is not logged in', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+    liffMock.isInClient.mockReturnValue(true);
+    liffMock.isLoggedIn.mockReturnValue(false);
+    liffMock.isApiAvailable.mockReturnValue(false);
+    window.history.replaceState({}, '', '/line-liff-card/card/default/');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '請先登入 LINE' })).toBeInTheDocument();
+    });
+  });
+
+  it('protects placeholder links with same-site fallbacks', () => {
+    render(<App />);
+
+    expect(screen.getByRole('link', { name: '加入 LINE / 品牌入口' })).toHaveAttribute('href', 'http://localhost:3000/#connect');
+    expect(screen.getByRole('link', { name: '服務介紹' })).toHaveAttribute('href', 'http://localhost:3000/#overview');
+    expect(screen.getByRole('link', { name: '預約洽詢' })).toHaveAttribute('href', 'http://localhost:3000/#booking');
   });
 });

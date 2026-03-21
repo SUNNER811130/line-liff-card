@@ -78,7 +78,10 @@ const getCurrentUrl = () => {
     throw new Error('目前環境無法取得網址。');
   }
 
-  return window.location.href;
+  return new URL(
+    `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    window.location.origin,
+  ).toString();
 };
 
 export async function initLiff(): Promise<LiffInitResult> {
@@ -145,7 +148,7 @@ export function ensureLogin(): boolean {
     return false;
   }
 
-  liff.login({ redirectUri: window.location.href });
+  liff.login({ redirectUri: getCurrentUrl() });
   return false;
 }
 
@@ -179,7 +182,7 @@ export async function createPermanentLink(url?: string): Promise<string> {
 }
 
 export async function buildShareTargetUrl(url?: string): Promise<string> {
-  const targetUrl = url ?? (hasWindow() ? window.location.href : '');
+  const targetUrl = url ?? (hasWindow() ? getCurrentUrl() : '');
 
   if (!getConfiguredLiffId()) {
     return targetUrl;

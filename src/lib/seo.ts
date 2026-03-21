@@ -1,4 +1,4 @@
-import type { CardConfig } from '../content/card.config';
+import type { CardConfig } from '../content/cards/types';
 import { toAssetUrl } from './runtime';
 
 const upsertMeta = (selector: string, attribute: 'name' | 'property', value: string) => {
@@ -19,4 +19,11 @@ export const applySeo = (config: CardConfig) => {
   upsertMeta('meta[property="og:title"]', 'property', config.seo.ogTitle);
   upsertMeta('meta[property="og:description"]', 'property', config.seo.ogDescription);
   upsertMeta('meta[property="og:image"]', 'property', toAssetUrl(config.seo.ogImage));
+};
+
+export const applyBasicSeo = (title: string, description: string) => {
+  document.title = title;
+  upsertMeta('meta[name="description"]', 'name', description);
+  upsertMeta('meta[property="og:title"]', 'property', title);
+  upsertMeta('meta[property="og:description"]', 'property', description);
 };

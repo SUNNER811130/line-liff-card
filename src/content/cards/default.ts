@@ -1,32 +1,7 @@
-export type CardButton = {
-  label: string;
-  color: string;
-  url: string;
-};
+import type { CardConfig } from './types';
 
-export type CardConfig = {
-  brand: string;
-  englishName: string;
-  heroTitle: string;
-  mainTitle: string;
-  description: string;
-  bullets: string[];
-  heroImage: string;
-  heroLink: string;
-  button1: CardButton;
-  button2: CardButton;
-  button3: CardButton;
-  qrEnabled: boolean;
-  seo: {
-    title: string;
-    description: string;
-    ogTitle: string;
-    ogDescription: string;
-    ogImage: string;
-  };
-};
-
-export const cardConfig: CardConfig = {
+export const defaultCard: CardConfig = {
+  slug: 'default',
   brand: 'ELEVATE BUSINESS CARD',
   englishName: 'Client Success Office',
   heroTitle: '品牌聯絡、服務說明與商務洽詢的正式入口',

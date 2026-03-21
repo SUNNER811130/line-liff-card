@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import type { CardConfig } from '../content/card.config';
+import type { CardConfig } from '../content/cards/types';
 import {
   buildShareTargetUrl,
   createPermanentLink,

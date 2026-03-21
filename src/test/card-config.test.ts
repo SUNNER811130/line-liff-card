@@ -1,17 +1,30 @@
-import { cardConfig } from '../content/card.config';
+import { cards, getCardBySlug } from '../content/cards';
 
-describe('card config', () => {
-  it('loads required fields', () => {
-    expect(cardConfig.brand).toBeTruthy();
-    expect(cardConfig.englishName).toBeTruthy();
-    expect(cardConfig.bullets.length).toBeGreaterThan(0);
-    expect(cardConfig.qrEnabled).toBeTypeOf('boolean');
+describe('card collection', () => {
+  it('loads required card fields', () => {
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+
+    cards.forEach((card) => {
+      expect(card.slug).toBeTruthy();
+      expect(card.brand).toBeTruthy();
+      expect(card.englishName).toBeTruthy();
+      expect(card.bullets.length).toBeGreaterThan(0);
+      expect(card.qrEnabled).toBeTypeOf('boolean');
+    });
   });
 
   it('does not keep known placeholder urls in card actions', () => {
-    expect(cardConfig.heroLink).not.toContain('example');
-    expect(cardConfig.button1.url).not.toContain('example');
-    expect(cardConfig.button2.url).not.toContain('example');
-    expect(cardConfig.button3.url).not.toContain('example');
+    cards.forEach((card) => {
+      expect(card.heroLink).not.toContain('example');
+      expect(card.button1.url).not.toContain('example');
+      expect(card.button2.url).not.toContain('example');
+      expect(card.button3.url).not.toContain('example');
+    });
+  });
+
+  it('finds cards by slug', () => {
+    expect(getCardBySlug('default')?.englishName).toBe('Client Success Office');
+    expect(getCardBySlug('demo-consultant')?.englishName).toBe('Demo Consultant Studio');
+    expect(getCardBySlug('missing-card')).toBeUndefined();
   });
 });

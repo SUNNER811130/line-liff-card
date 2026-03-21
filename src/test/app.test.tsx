@@ -66,24 +66,52 @@ describe('App', () => {
     vi.clearAllMocks();
   });
 
-  it('renders three action buttons', () => {
+  it('renders the card collection on the home page', () => {
     render(<App />);
 
-    expect(screen.getByRole('link', { name: '加入 LINE / 品牌入口' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '服務介紹' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '預約洽詢' })).toBeInTheDocument();
+    expect(screen.getByText('多名片版本首頁')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '開啟名片' })).toHaveLength(2);
+    expect(screen.getByText('/card/default/')).toBeInTheDocument();
+    expect(screen.getByText('/card/demo-consultant/')).toBeInTheDocument();
   });
 
-  it('renders in web-preview mode without LIFF_ID', () => {
+  it('renders the default card for its slug route', async () => {
+    window.history.replaceState({}, '', '/card/default/');
+
     render(<App />);
-    expect(screen.getByText('WEB-PREVIEW')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'LIFF 尚未設定' })).toBeDisabled();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Client Success Office').length).toBeGreaterThan(0);
+      expect(screen.getByText('適合對外展示、分享與導流的商務電子名片預設版型')).toBeInTheDocument();
+    });
   });
 
-  it('shows open-in-line action on github pages style external mode', async () => {
+  it('renders different content for demo-consultant slug', async () => {
+    window.history.replaceState({}, '', '/card/demo-consultant/');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Demo Consultant Studio').length).toBeGreaterThan(0);
+      expect(screen.getByText('面向專案開發、顧問服務與企業合作的展示型電子名片')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '加入 LINE 顧問窗口' })).toBeInTheDocument();
+    });
+  });
+
+  it('shows fallback when slug does not exist', () => {
+    window.history.replaceState({}, '', '/card/missing-card/');
+
+    render(<App />);
+
+    expect(screen.getByText('找不到這張名片')).toBeInTheDocument();
+    expect(screen.getByText(/missing-card/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '返回名片列表' })).toHaveAttribute('href', '/');
+  });
+
+  it('shows LIFF ready state on a card slug route in external mode', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
-    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
-    window.history.replaceState({}, '', '/line-liff-card/card/default/');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/card/default/`);
+    window.history.replaceState({}, '', '/card/default/');
 
     render(<App />);
 
@@ -93,58 +121,13 @@ describe('App', () => {
     });
   });
 
-  it('keeps the main action visible when shareTargetPicker is unavailable', async () => {
+  it('shows share-ready state for demo-consultant slug', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
-    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
-    liffCoreMock.isInClient.mockReturnValue(true);
-    liffCoreMock.isLoggedIn.mockReturnValue(true);
-    liffCoreMock.isApiAvailable.mockReturnValue(false);
-    window.history.replaceState({}, '', '/line-liff-card/card/default/');
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByText('IN-LIFF')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '目前環境不支援分享' })).toBeDisabled();
-    });
-  });
-
-  it('shows login action when LIFF is in client but user is not logged in', async () => {
-    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
-    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
-    liffCoreMock.isInClient.mockReturnValue(true);
-    liffCoreMock.isLoggedIn.mockReturnValue(false);
-    liffCoreMock.isApiAvailable.mockReturnValue(false);
-    window.history.replaceState({}, '', '/line-liff-card/card/default/');
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: '請先登入 LINE' })).toBeInTheDocument();
-    });
-  });
-
-  it('falls back clearly when current url is outside endpoint', async () => {
-    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
-    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
-    window.history.replaceState({}, '', '/outside-page');
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByText('WEB-PREVIEW')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '前往正式展示入口' })).toBeInTheDocument();
-      expect(screen.getByText(/不在 LIFF Endpoint URL 範圍內/)).toBeInTheDocument();
-    });
-  });
-
-  it('shows share-ready badge when shareTargetPicker is available', async () => {
-    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
-    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/card/demo-consultant/`);
     liffCoreMock.isInClient.mockReturnValue(true);
     liffCoreMock.isLoggedIn.mockReturnValue(true);
     liffCoreMock.isApiAvailable.mockReturnValue(true);
-    window.history.replaceState({}, '', '/line-liff-card/card/default/');
+    window.history.replaceState({}, '', '/card/demo-consultant/');
 
     render(<App />);
 
@@ -152,13 +135,5 @@ describe('App', () => {
       expect(screen.getByText('SHARE-AVAILABLE')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '分享好友' })).toBeInTheDocument();
     });
-  });
-
-  it('protects placeholder links with same-site fallbacks', () => {
-    render(<App />);
-
-    expect(screen.getByRole('link', { name: '加入 LINE / 品牌入口' })).toHaveAttribute('href', 'http://localhost:3000/#connect');
-    expect(screen.getByRole('link', { name: '服務介紹' })).toHaveAttribute('href', 'http://localhost:3000/#overview');
-    expect(screen.getByRole('link', { name: '預約洽詢' })).toHaveAttribute('href', 'http://localhost:3000/#booking');
   });
 });

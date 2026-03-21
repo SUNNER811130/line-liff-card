@@ -421,6 +421,11 @@ button {
   background: #f5f8fb;
 }
 
+.diagnostics-summary {
+  display: grid;
+  gap: 14px;
+}
+
 .liff-debug-panel {
   display: grid;
   gap: 12px;

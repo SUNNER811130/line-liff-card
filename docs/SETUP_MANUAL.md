@@ -92,6 +92,12 @@ https://<user>.github.io/line-liff-card/
 - `liff.permanentLink.createUrlBy()` 也只能替這個範圍內的頁面建立連結
 - 如果網址跑到 `Endpoint URL` 外，本專案會直接顯示防呆錯誤訊息
 
+### LIFF URL vs GitHub Pages URL
+
+- `https://liff.line.me/<LIFF_ID>` 是 LIFF 正式入口，LINE 會帶入正確初始化上下文，適合驗收登入、分享與 permanent link。
+- `https://<user>.github.io/line-liff-card/` 是公開展示網址，適合外部瀏覽器預覽、掃 QR、複製連結與對外展示。
+- 兩者只要都落在同一個 `Endpoint URL` 範圍內，就能共用同一份前端頁面；若目前網址不在該範圍內，LIFF 功能會退回 fallback 模式。
+
 ## 7. LIFF Test
 
 1. 完成部署後，用正式網址更新 LIFF `Endpoint URL`。
@@ -107,6 +113,15 @@ https://<user>.github.io/line-liff-card/
    - `loggedIn`
    - `shareAvailable`
    - `current URL`
+
+畫面 badge 的判讀方式：
+
+- `LIFF-READY`
+  - LIFF 已設定且頁面位於正確 Endpoint URL 範圍，但目前在外部瀏覽器
+- `IN-LIFF`
+  - 已在 LINE 內初始化成功，但目前容器不支援 `shareTargetPicker`
+- `SHARE-AVAILABLE`
+  - 已在 LINE 內初始化成功，且可直接使用 `shareTargetPicker`
 
 ## 8. Web Fallback Test
 

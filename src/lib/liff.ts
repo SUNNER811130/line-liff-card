@@ -1,5 +1,3 @@
-import liff from '@line/liff';
-
 export type LiffInitResult =
   | {
       status: 'disabled';
@@ -13,8 +11,33 @@ export type LiffInitResult =
       message: string;
     };
 
+type LiffSdk = {
+  init: (config: { liffId: string }) => Promise<void>;
+  isInClient: () => boolean;
+  isLoggedIn: () => boolean;
+  login: (config: { redirectUri: string }) => void;
+  isApiAvailable: (apiName: string) => boolean;
+  shareTargetPicker: (messages: unknown[]) => Promise<unknown>;
+  permanentLink: {
+    createUrlBy: (url: string) => Promise<string>;
+  };
+  use: (module: object) => unknown;
+};
+
+type LiffModuleCtor = new () => object;
+
+const LIFF_REDIRECT_QUERY_KEYS = [
+  'access_token',
+  'id_token',
+  'liff.state',
+  'liff.referrer',
+  'liffClientId',
+  'liffRedirectUri',
+];
+
 let initPromise: Promise<LiffInitResult> | null = null;
 let lastInitResult: LiffInitResult | null = null;
+let liffSdkPromise: Promise<LiffSdk> | null = null;
 
 export const getConfiguredLiffId = () => import.meta.env.VITE_LIFF_ID?.trim();
 export const getConfiguredSiteUrl = () => import.meta.env.VITE_SITE_URL?.trim();
@@ -47,6 +70,70 @@ const getEndpointUrl = (): URL | null => {
   }
 };
 
+const getCurrentWindowUrl = (): URL => {
+  if (!hasWindow()) {
+    throw new Error('目前環境無法取得網址。');
+  }
+
+  return new URL(
+    `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    window.location.origin,
+  );
+};
+
+const cleanupLoginRedirectUrl = () => {
+  if (!hasWindow()) {
+    return;
+  }
+
+  const currentUrl = getCurrentWindowUrl();
+  let changed = false;
+
+  LIFF_REDIRECT_QUERY_KEYS.forEach((key) => {
+    if (currentUrl.searchParams.has(key)) {
+      currentUrl.searchParams.delete(key);
+      changed = true;
+    }
+  });
+
+  if (!changed) {
+    return;
+  }
+
+  const sanitizedPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+  window.history.replaceState(window.history.state, '', sanitizedPath);
+};
+
+const installLiffModule = async (
+  sdk: LiffSdk,
+  loader: Promise<{ default: LiffModuleCtor }>,
+) => {
+  const { default: ModuleCtor } = await loader;
+  sdk.use(new ModuleCtor());
+};
+
+const loadLiffSdk = async (): Promise<LiffSdk> => {
+  if (!liffSdkPromise) {
+    liffSdkPromise = (async () => {
+      const [{ default: liffCore }, ...modules] = await Promise.all([
+        import('@line/liff/core'),
+        import('@line/liff/is-in-client'),
+        import('@line/liff/is-logged-in'),
+        import('@line/liff/login'),
+        import('@line/liff/is-api-available'),
+        import('@line/liff/share-target-picker'),
+        import('@line/liff/permanent-link'),
+      ]);
+
+      const sdk = liffCore as unknown as LiffSdk;
+      await Promise.all(modules.map((moduleLoader) => installLiffModule(sdk, Promise.resolve(moduleLoader))));
+      return sdk;
+    })();
+  }
+
+  return liffSdkPromise;
+};
+
 export const getExpectedEndpoint = (): string =>
   getEndpointUrl()?.toString() ?? '未設定 VITE_SITE_URL';
 
@@ -55,33 +142,40 @@ export const getLiffEntryUrl = (): string => {
   return liffId ? `https://liff.line.me/${liffId}` : '';
 };
 
-const isUnderEndpointUrl = (target: URL, endpoint: URL): boolean =>
-  target.origin === endpoint.origin &&
-  normalizePathname(target.pathname).startsWith(normalizePathname(endpoint.pathname));
+export const getCurrentUrl = (): string => {
+  cleanupLoginRedirectUrl();
+  return getCurrentWindowUrl().toString();
+};
 
-const assertUrlWithinEndpoint = (targetUrl: string) => {
+export const isCurrentUrlWithinEndpoint = (targetUrl = hasWindow() ? getCurrentUrl() : ''): boolean => {
   const endpointUrl = getEndpointUrl();
-  if (!endpointUrl) {
-    return;
+  if (!endpointUrl || !targetUrl) {
+    return true;
   }
 
   const target = toUrl(targetUrl);
-  if (!isUnderEndpointUrl(target, endpointUrl)) {
-    throw new Error(
-      `目前頁面不在 LIFF Endpoint URL 範圍內，請確認網址位於 ${endpointUrl.toString()} 之下。`,
-    );
-  }
+  return (
+    target.origin === endpointUrl.origin &&
+    normalizePathname(target.pathname).startsWith(normalizePathname(endpointUrl.pathname))
+  );
 };
 
-const getCurrentUrl = () => {
-  if (!hasWindow()) {
-    throw new Error('目前環境無法取得網址。');
+export const getEndpointFallbackUrl = (): string =>
+  getEndpointUrl()?.toString() || (hasWindow() ? getCurrentUrl() : '');
+
+const getEndpointMismatchMessage = (targetUrl: string) => {
+  const endpointUrl = getEndpointUrl();
+  if (!endpointUrl) {
+    return '未設定 VITE_SITE_URL，無法驗證 LIFF Endpoint URL 範圍。';
   }
 
-  return new URL(
-    `${window.location.pathname}${window.location.search}${window.location.hash}`,
-    window.location.origin,
-  ).toString();
+  return `目前頁面 ${toUrl(targetUrl).toString()} 不在 LIFF Endpoint URL 範圍內，請改由 ${endpointUrl.toString()} 或 LIFF URL 開啟。`;
+};
+
+const assertUrlWithinEndpoint = (targetUrl: string) => {
+  if (!isCurrentUrlWithinEndpoint(targetUrl)) {
+    throw new Error(getEndpointMismatchMessage(targetUrl));
+  }
 };
 
 export async function initLiff(): Promise<LiffInitResult> {
@@ -101,8 +195,10 @@ export async function initLiff(): Promise<LiffInitResult> {
   if (!initPromise) {
     initPromise = (async () => {
       try {
-        assertUrlWithinEndpoint(getCurrentUrl());
-        await liff.init({ liffId });
+        const currentUrl = getCurrentUrl();
+        assertUrlWithinEndpoint(currentUrl);
+        const sdk = await loadLiffSdk();
+        await sdk.init({ liffId });
         lastInitResult = { status: 'ready' };
         return lastInitResult;
       } catch (error) {
@@ -117,30 +213,38 @@ export async function initLiff(): Promise<LiffInitResult> {
   return initPromise;
 }
 
-export function isInClient(): boolean {
+export async function isInClient(): Promise<boolean> {
   const liffId = getConfiguredLiffId();
   if (!liffId || !lastInitResult || lastInitResult.status !== 'ready') {
     return false;
   }
 
-  return liff.isInClient();
+  const sdk = await loadLiffSdk();
+  return sdk.isInClient();
 }
 
-export function isLoggedIn(): boolean {
+export async function isLoggedIn(): Promise<boolean> {
   const liffId = getConfiguredLiffId();
   if (!liffId || !lastInitResult || lastInitResult.status !== 'ready') {
     return false;
   }
 
-  return liff.isLoggedIn();
+  const sdk = await loadLiffSdk();
+  return sdk.isLoggedIn();
 }
 
-export function ensureLogin(): boolean {
+export async function ensureLogin(): Promise<boolean> {
   if (!getConfiguredLiffId()) {
     return false;
   }
 
-  if (isLoggedIn()) {
+  const initResult = await initLiff();
+  if (initResult.status !== 'ready') {
+    return false;
+  }
+
+  const sdk = await loadLiffSdk();
+  if (sdk.isLoggedIn()) {
     return true;
   }
 
@@ -148,17 +252,18 @@ export function ensureLogin(): boolean {
     return false;
   }
 
-  liff.login({ redirectUri: getCurrentUrl() });
+  sdk.login({ redirectUri: getCurrentUrl() });
   return false;
 }
 
-export function isShareAvailable(): boolean {
+export async function isShareAvailable(): Promise<boolean> {
   const liffId = getConfiguredLiffId();
   if (!liffId || !lastInitResult || lastInitResult.status !== 'ready') {
     return false;
   }
 
-  return liff.isApiAvailable('shareTargetPicker');
+  const sdk = await loadLiffSdk();
+  return sdk.isApiAvailable('shareTargetPicker');
 }
 
 export async function createPermanentLink(url?: string): Promise<string> {
@@ -178,24 +283,43 @@ export async function createPermanentLink(url?: string): Promise<string> {
   const targetUrl = url ?? getCurrentUrl();
   assertUrlWithinEndpoint(targetUrl);
 
-  return liff.permanentLink.createUrlBy(toUrl(targetUrl).toString());
+  const sdk = await loadLiffSdk();
+  return sdk.permanentLink.createUrlBy(toUrl(targetUrl).toString());
 }
 
 export async function buildShareTargetUrl(url?: string): Promise<string> {
   const targetUrl = url ?? (hasWindow() ? getCurrentUrl() : '');
+  const liffEntryUrl = getLiffEntryUrl();
 
   if (!getConfiguredLiffId()) {
     return targetUrl;
   }
 
+  if (!isCurrentUrlWithinEndpoint(targetUrl)) {
+    return liffEntryUrl || getEndpointFallbackUrl() || targetUrl;
+  }
+
   try {
     return await createPermanentLink(targetUrl);
   } catch {
-    return getLiffEntryUrl() || targetUrl;
+    return liffEntryUrl || getEndpointFallbackUrl() || targetUrl;
   }
+}
+
+export async function shareCard(messages: unknown[]): Promise<unknown> {
+  const initResult = await initLiff();
+  if (initResult.status !== 'ready') {
+    throw new Error(
+      initResult.status === 'error' ? initResult.message : '未設定 VITE_LIFF_ID，無法啟用 LIFF 分享。',
+    );
+  }
+
+  const sdk = await loadLiffSdk();
+  return sdk.shareTargetPicker(messages);
 }
 
 export function __resetLiffForTests() {
   initPromise = null;
   lastInitResult = null;
+  liffSdkPromise = null;
 }

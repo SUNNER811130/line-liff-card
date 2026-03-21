@@ -3,22 +3,53 @@ import { vi } from 'vitest';
 import { App } from '../App';
 import { __resetLiffForTests } from '../lib/liff';
 
-const { liffMock } = vi.hoisted(() => ({
-  liffMock: {
+const { liffCoreMock } = vi.hoisted(() => ({
+  liffCoreMock: {
+    use: vi.fn().mockReturnThis(),
     init: vi.fn().mockResolvedValue(undefined),
     isInClient: vi.fn(() => false),
     isLoggedIn: vi.fn(() => true),
     login: vi.fn(),
     isApiAvailable: vi.fn(() => false),
+    shareTargetPicker: vi.fn(),
     permanentLink: {
       createUrlBy: vi.fn(async (url: string) => `https://liff.line.me/mock?target=${encodeURIComponent(url)}`),
     },
-    shareTargetPicker: vi.fn(),
   },
 }));
 
-vi.mock('@line/liff', () => ({
-  default: liffMock,
+class MockModule {
+  install() {
+    return {};
+  }
+}
+
+vi.mock('@line/liff/core', () => ({
+  default: liffCoreMock,
+}));
+
+vi.mock('@line/liff/is-in-client', () => ({
+  default: MockModule,
+}));
+
+vi.mock('@line/liff/is-logged-in', () => ({
+  default: MockModule,
+}));
+
+vi.mock('@line/liff/login', () => ({
+  default: MockModule,
+}));
+
+vi.mock('@line/liff/is-api-available', () => ({
+  default: MockModule,
+}));
+
+vi.mock('@line/liff/share-target-picker', () => ({
+  default: MockModule,
+}));
+
+vi.mock('@line/liff/permanent-link', () => ({
+  default: MockModule,
 }));
 
 describe('App', () => {
@@ -44,13 +75,12 @@ describe('App', () => {
   });
 
   it('renders in web-preview mode without LIFF_ID', () => {
-    vi.stubEnv('VITE_LIFF_ID', '');
     render(<App />);
     expect(screen.getByText('WEB-PREVIEW')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'LIFF 尚未設定' })).toBeDisabled();
   });
 
-  it('shows open-in-line action when LIFF is configured outside LINE', async () => {
+  it('shows open-in-line action on github pages style external mode', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
     window.history.replaceState({}, '', '/line-liff-card/card/default/');
@@ -59,16 +89,16 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByText('LIFF-READY')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '請用 LINE 開啟' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '開啟 LINE 版名片' })).toBeInTheDocument();
     });
   });
 
   it('keeps the main action visible when shareTargetPicker is unavailable', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
-    liffMock.isInClient.mockReturnValue(true);
-    liffMock.isLoggedIn.mockReturnValue(true);
-    liffMock.isApiAvailable.mockReturnValue(false);
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    liffCoreMock.isApiAvailable.mockReturnValue(false);
     window.history.replaceState({}, '', '/line-liff-card/card/default/');
 
     render(<App />);
@@ -82,15 +112,45 @@ describe('App', () => {
   it('shows login action when LIFF is in client but user is not logged in', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
-    liffMock.isInClient.mockReturnValue(true);
-    liffMock.isLoggedIn.mockReturnValue(false);
-    liffMock.isApiAvailable.mockReturnValue(false);
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(false);
+    liffCoreMock.isApiAvailable.mockReturnValue(false);
     window.history.replaceState({}, '', '/line-liff-card/card/default/');
 
     render(<App />);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '請先登入 LINE' })).toBeInTheDocument();
+    });
+  });
+
+  it('falls back clearly when current url is outside endpoint', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+    window.history.replaceState({}, '', '/outside-page');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('WEB-PREVIEW')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '前往正式展示入口' })).toBeInTheDocument();
+      expect(screen.getByText(/不在 LIFF Endpoint URL 範圍內/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows share-ready badge when shareTargetPicker is available', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    liffCoreMock.isApiAvailable.mockReturnValue(true);
+    window.history.replaceState({}, '', '/line-liff-card/card/default/');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('SHARE-AVAILABLE')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '分享好友' })).toBeInTheDocument();
     });
   });
 

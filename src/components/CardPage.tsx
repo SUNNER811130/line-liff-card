@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import liff from '@line/liff';
 import QRCode from 'qrcode';
 import type { CardConfig } from '../content/card.config';
 import {
@@ -7,12 +6,15 @@ import {
   createPermanentLink,
   ensureLogin,
   getConfiguredLiffId,
+  getEndpointFallbackUrl,
   getExpectedEndpoint,
   getLiffEntryUrl,
   initLiff,
+  isCurrentUrlWithinEndpoint,
   isInClient,
   isLoggedIn,
   isShareAvailable,
+  shareCard,
 } from '../lib/liff';
 import { getAppMode, getPublicPageUrl, resolveActionUrl, toAssetUrl } from '../lib/runtime';
 import { applySeo } from '../lib/seo';
@@ -115,6 +117,8 @@ export function CardPage({ config }: CardPageProps) {
   const liffId = getConfiguredLiffId();
   const liffEnabled = Boolean(liffId);
   const liffEntryUrl = getLiffEntryUrl();
+  const endpointFallbackUrl = getEndpointFallbackUrl();
+  const inEndpointScope = isCurrentUrlWithinEndpoint(pageUrl);
   const connectUrl = resolveActionUrl(config.button1.url, liffEntryUrl || pageUrl || expectedEndpoint);
   const overviewUrl = resolveActionUrl(config.button2.url, pageUrl || expectedEndpoint);
   const bookingUrl = resolveActionUrl(config.button3.url, pageUrl || expectedEndpoint);
@@ -160,9 +164,9 @@ export function CardPage({ config }: CardPageProps) {
 
       setLiffInitError(null);
       setLiffReady(true);
-      setInClient(isInClient());
-      setLoggedIn(isLoggedIn());
-      setShareAvailable(isShareAvailable());
+      setInClient(await isInClient());
+      setLoggedIn(await isLoggedIn());
+      setShareAvailable(await isShareAvailable());
     };
 
     bootstrapLiff();
@@ -219,7 +223,7 @@ export function CardPage({ config }: CardPageProps) {
 
     if (inClient) {
       if (!loggedIn) {
-        ensureLogin();
+        void ensureLogin();
         setLiffActionError('尚未登入 LINE，請先登入後再分享。');
         setShareState('failed');
         return;
@@ -233,7 +237,7 @@ export function CardPage({ config }: CardPageProps) {
 
       try {
         const permanentLink = await createPermanentLink(pageUrl);
-        const shareResult = await liff.shareTargetPicker([buildFlexMessage(config, permanentLink, pageUrl)]);
+        const shareResult = await shareCard([buildFlexMessage(config, permanentLink, pageUrl)]);
         if (shareResult) {
           setShareState('shared');
           setShareStatus('已開啟 LINE 分享對象選擇器。');
@@ -278,6 +282,10 @@ export function CardPage({ config }: CardPageProps) {
       return '目前以公開網頁模式展示，LIFF 分享功能可在設定 LIFF ID 後啟用。';
     }
 
+    if (!inEndpointScope) {
+      return '目前網址不在 LIFF Endpoint 範圍內，畫面會退回公開頁模式，請改由正式 LIFF URL 或 GitHub Pages 根路徑進入。';
+    }
+
     if (liffInitError) {
       return 'LIFF 設定已偵測，但目前初始化失敗，建議改由 LINE 內開啟正式連結。';
     }
@@ -312,19 +320,25 @@ export function CardPage({ config }: CardPageProps) {
       return {
         heading: 'LIFF 初始化失敗',
         detail: liffInitError,
-        buttonLabel: '請用 LINE 開啟',
-        disabled: !liffEntryUrl,
-        onClick: liffEntryUrl ? () => window.location.assign(liffEntryUrl) : undefined,
+        buttonLabel: inEndpointScope ? '開啟 LINE 版名片' : '前往正式展示入口',
+        disabled: !(inEndpointScope ? liffEntryUrl : endpointFallbackUrl),
+        onClick: () => {
+          window.location.assign((inEndpointScope ? liffEntryUrl : endpointFallbackUrl) || pageUrl);
+        },
       };
     }
 
     if (!inClient) {
       return {
-        heading: '請在 LINE 中開啟',
-        detail: '目前為外部瀏覽器，請改由 LINE 開啟 LIFF 才能進一步使用分享能力。',
-        buttonLabel: '請用 LINE 開啟',
-        disabled: !liffEntryUrl,
-        onClick: liffEntryUrl ? () => window.location.assign(liffEntryUrl) : undefined,
+        heading: '外部瀏覽器預覽模式',
+        detail: inEndpointScope
+          ? '目前可先檢視正式卡片內容，若要分享給 LINE 好友，請改由 LINE 開啟 LIFF 版名片。'
+          : '目前網址不在 LIFF Endpoint 範圍內，請先回到正式展示入口，再切換 LINE 開啟。',
+        buttonLabel: inEndpointScope ? '開啟 LINE 版名片' : '前往正式展示入口',
+        disabled: !(inEndpointScope ? liffEntryUrl : endpointFallbackUrl),
+        onClick: () => {
+          window.location.assign((inEndpointScope ? liffEntryUrl : endpointFallbackUrl) || pageUrl);
+        },
       };
     }
 
@@ -335,7 +349,7 @@ export function CardPage({ config }: CardPageProps) {
         buttonLabel: '請先登入 LINE',
         disabled: false,
         onClick: () => {
-          ensureLogin();
+          void ensureLogin();
         },
       };
     }
@@ -469,8 +483,14 @@ export function CardPage({ config }: CardPageProps) {
                 </dl>
               ) : (
                 <div className="diagnostics-summary">
-                  <p className="diagnostics-summary-title">系統狀態</p>
-                  <p className="diagnostics-summary-text">{operationalStatus}</p>
+                  <div>
+                    <p className="diagnostics-summary-title">Mode</p>
+                    <p className="diagnostics-summary-text">{mode}</p>
+                  </div>
+                  <div>
+                    <p className="diagnostics-summary-title">Entry</p>
+                    <p className="diagnostics-summary-text">{inEndpointScope ? 'Endpoint OK' : 'Outside Endpoint'}</p>
+                  </div>
                 </div>
               )}
             </section>

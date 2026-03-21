@@ -41,6 +41,12 @@ VITE_SITE_URL=https://<user>.github.io/line-liff-card/
 
 `Endpoint URL` 必須指向實際部署頁面根路徑，例如 `https://<user>.github.io/line-liff-card/`。LIFF `init` 與 permanent link 都只會在這個 URL 之下的頁面工作，若開在其他路徑，畫面會顯示防呆錯誤而不是白屏。
 
+### Why LIFF URL And github.io Behave Differently
+
+- `https://liff.line.me/<LIFF_ID>` 是 LINE 管理的 LIFF 入口，會先帶你進入符合 Endpoint URL 範圍的正式頁面，LIFF SDK 可正常初始化。
+- `https://<user>.github.io/line-liff-card/` 是公開網頁網址，外部瀏覽器可直接開啟，但只有當目前頁面仍位於 `VITE_SITE_URL` 所指定的 Endpoint URL 之下時，LIFF init 與 permanent link 才會成功。
+- 如果使用者從錯誤的 github.io 子路徑、臨時網址或不在 Endpoint 範圍的頁面進入，專案會退回公開頁 fallback，不直接嘗試失敗的 LIFF runtime。
+
 ## GitHub Pages
 
 本專案已內建 [`.github/workflows/deploy-pages.yml`](/home/usersun/projects/line-liff-card/.github/workflows/deploy-pages.yml)，每次 push 到 `main` 都會自動：
@@ -97,6 +103,20 @@ npm run build -- --base=/YOUR_REPO_NAME/
 4. 確認畫面顯示 `liff-ready`，並且有 `分享好友` 按鈕。
 5. 點 `分享好友`，應會走 `shareTargetPicker`，送出一張 Flex Message。
 6. 在外部瀏覽器開同一個頁面，應改成顯示 `複製 LIFF 分享連結`。
+
+### Mode Badge Meanings
+
+- `LIFF-READY`
+  - 已設定 `VITE_LIFF_ID`
+  - 目前頁面位於正確 Endpoint URL 範圍
+  - 但目前不在 LINE client 內，通常是 github.io 或外部瀏覽器開啟
+- `IN-LIFF`
+  - 已在 LINE client 內成功初始化
+  - 但目前容器 / 版本不支援 `shareTargetPicker`
+- `SHARE-AVAILABLE`
+  - 已在 LINE client 內成功初始化
+  - 且 `isApiAvailable('shareTargetPicker') === true`
+  - 此時最適合直接驗收分享好友流程
 
 ## Web Fallback Test
 

@@ -26,8 +26,8 @@ describe('card collection', () => {
   });
 
   it('finds cards by slug', () => {
-    expect(getCardBySlug('default')?.content.fullName).toBe('姓名');
-    expect(getCardBySlug('demo-consultant')?.content.fullName).toBe('姓名');
+    expect(getCardBySlug('default')?.content.fullName).toBe('蘇彥宇 Sunner');
+    expect(getCardBySlug('demo-consultant')?.content.fullName).toBe('蘇彥宇 Sunner');
     expect(getCardBySlug('missing-card')).toBeUndefined();
   });
 
@@ -42,7 +42,7 @@ describe('card collection', () => {
     expect(getCardBySlug('demo-consultant')?.appearance.theme).toBe('executive');
   });
 
-  it('always appends the share action last', () => {
+  it('keeps share as the third action after the first two editable links', () => {
     const card = getCardBySlug('default');
 
     expect(card).toBeTruthy();
@@ -55,12 +55,27 @@ describe('card collection', () => {
           label: '隱藏按鈕',
           enabled: false,
         },
+        {
+          id: 'overflow',
+          label: '不應出現的第四顆按鈕',
+          url: '#overflow',
+          enabled: true,
+        },
       ],
       fallbackUrl: 'https://example.test/card/default/',
       onShare: () => undefined,
     });
 
-    expect(actions.at(-1)).toMatchObject({
+    expect(actions).toHaveLength(3);
+    expect(actions[0]).toMatchObject({
+      kind: 'link',
+      label: '立即聯繫我',
+    });
+    expect(actions[1]).toMatchObject({
+      kind: 'link',
+      label: '查看服務內容',
+    });
+    expect(actions[2]).toMatchObject({
       kind: 'button',
       key: 'share',
       label: '分享此電子名片給 LINE 好友',

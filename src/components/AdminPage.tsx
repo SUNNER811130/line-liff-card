@@ -25,11 +25,16 @@ const normalizeAction = (action: CardActionConfig, fallbackId: string): CardActi
   enabled: action.enabled ?? true,
 });
 
+const actionPlaceholderById: Record<string, string> = {
+  contact: '#contactUrl',
+  services: '#serviceUrl',
+};
+
 const normalizeDraft = (draft: CardConfig): CardConfig => {
   assertCardConfig(draft);
   return {
     ...draft,
-    actions: draft.actions.slice(0, 4).map((action, index) => normalizeAction(action, `action-${index + 1}`)),
+    actions: draft.actions.slice(0, 2).map((action, index) => normalizeAction(action, `action-${index + 1}`)),
     share: {
       ...draft.share,
       buttonLabel: draft.share.buttonLabel?.trim() || '分享此電子名片給 LINE 好友',
@@ -276,7 +281,11 @@ export function AdminPage() {
                   </label>
                   <label className="admin-field">
                     <span>按鈕連結</span>
-                    <input value={action.url ?? ''} onChange={(event) => updateAction(index, (current) => ({ ...current, url: event.target.value }))} />
+                    <input
+                      value={action.url ?? ''}
+                      placeholder={actionPlaceholderById[action.id] ?? '#customUrl'}
+                      onChange={(event) => updateAction(index, (current) => ({ ...current, url: event.target.value }))}
+                    />
                   </label>
                   <label className="admin-field">
                     <span>按鈕樣式</span>
@@ -302,6 +311,9 @@ export function AdminPage() {
                   }
                 />
               </label>
+              <p className="support-copy admin-field-hint">
+                前兩顆是可編輯的一般按鈕，第三顆固定是系統分享按鈕；這裡只能調整文案，不能移除分享功能。
+              </p>
             </div>
           </section>
 

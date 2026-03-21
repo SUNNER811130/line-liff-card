@@ -27,7 +27,7 @@
 
 ## 目前有哪些已知限制
 
-- 真正正式內容仍是 placeholder 文案，尚未填入實際品牌 / 個人資料
+- 正式文案已更新為蘇彥宇 Sunner / 關係護理室版本，但前兩顆按鈕正式連結仍待使用者確認
 - 目前只有一張正式卡片，`cards` collection 只有 `default`
 - `demo-consultant` 已不是獨立卡，只是 legacy slug
 - admin 無法寫回 repo、GitHub Pages、Sheets 或任何遠端資料源
@@ -38,7 +38,8 @@
 
 ## 目前有哪些待補內容
 
-- 正式卡片真實文案、品牌資料、圖片、外部連結
+- 前兩顆按鈕正式連結確認與套用
+- 正式卡片主視覺與 OG 圖替換
 - admin 與正式 config 的銜接策略
 - 外部資料來源 adapter
 - Google Sheets backend PoC
@@ -64,10 +65,12 @@
 - 來源檔案是 `src/content/cards/default.ts`
 - `default` 是唯一正式卡片 slug
 - 外觀為 `executive` theme + `profile-right` layout
-- 一般 action 目前只有兩顆：`聯絡`、`預約`
-- 分享按鈕由系統追加在最後，不寫在 `actions` 內
+- 正式內容已套用為蘇彥宇 Sunner / 關係護理室版本
+- 一般 action 目前只有兩顆：`立即聯繫我`、`查看服務內容`
+- 前兩顆按鈕連結目前使用待替換 placeholder：`#contactUrl`、`#serviceUrl`
+- 第三顆按鈕固定為系統分享按鈕，不寫在 `actions` 內
 - `demo-consultant` 被放在 `legacySlugs`
-- 目前內容仍屬可替換樣板，不適合直接當真實品牌公開頁
+- 前台未顯示 LIFF URL、Public URL 或工程資訊
 
 ## admin MVP 現況
 
@@ -82,13 +85,13 @@
 
 - 文件層面仍混有多卡時期敘述，容易讓新接手者誤判目前還有 `demo-consultant` 實體資料檔
 - `scripts/smoke-pages.sh` 與部分測試仍保留 `dist/card/demo-consultant/index.html` 驗證，這是 legacy 相容，不代表多卡仍在營運
-- 若 action 使用 placeholder 或空值，runtime 會回退到當前頁，可能掩蓋內容尚未補齊的問題
+- 前兩顆 action 目前仍是待確認 placeholder hash，若未替換，點擊後只會停留在頁內 hash 狀態
 - LIFF 是否能在正式環境成功初始化，仍依賴 `.env.production` 與 LINE Developers Console 設定，repo 內無法單靠程式碼保證
 - `VITE_SITE_URL` 若指向單一卡片頁，其他 slug 頁面可能不在 LIFF Endpoint 範圍內，只能走 web fallback
 
 ## 下一步建議
 
-1. 先把正式卡片的真實內容、圖片與連結補齊，讓 `/card/default/` 可正式對外使用。
+1. 先確認前兩顆按鈕正式連結，替換 `#contactUrl` 與 `#serviceUrl`。
 2. 明確決定未來資料來源策略：繼續 local config、接 Google Sheets，或直接做 API/CMS。
 3. 將 admin 產出的 JSON 與正式 config 接軌，避免管理頁只是獨立 sandbox。
 4. 清理 README、Setup、測試敘述中的多卡舊語意，降低交接成本。

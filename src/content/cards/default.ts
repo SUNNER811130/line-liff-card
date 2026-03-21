@@ -1,5 +1,8 @@
 import { defineCardConfig } from './schema';
 
+const pendingContactUrl = '#contactUrl';
+const pendingServiceUrl = '#serviceUrl';
+
 export const defaultCard = defineCardConfig({
   id: 'formal-business-card',
   slug: 'default',
@@ -16,49 +19,49 @@ export const defaultCard = defineCardConfig({
   },
   photo: {
     src: 'images/hero-placeholder.svg',
-    alt: '正式電子名片主視覺',
+    alt: '蘇彥宇 Sunner 正式電子名片主視覺',
     link: '#actions',
   },
   content: {
-    brandName: '品牌名稱',
-    fullName: '姓名',
-    title: '職稱',
-    headline: '正式商務電子名片',
-    subheadline: '可持續更新、可對外使用、可作為後續後台資料來源',
+    brandName: '關係護理室',
+    fullName: '蘇彥宇 Sunner',
+    title: '關係教練｜AI 自動化講師',
+    headline: '關係溝通、人格解析與 AI 自動化整合',
+    subheadline: '讓相愛更簡單，讓相處更容易',
     intro:
-      '這裡可替換為您的品牌定位、專業介紹與合作方式，讓客戶在 LINE 內或瀏覽器開啟時，都能快速理解您的角色與下一步聯絡方式。',
-    highlightsTitle: '專業簡介',
-    highlights: ['突出品牌識別與個人職務定位', '適合首次認識、後續追蹤與商務合作交流', '支援 LINE 內分享與一般網頁開啟的相容流程'],
-    actionsTitle: '主要操作',
-    actionsDescription: '一般按鈕由設定資料控制，分享按鈕由系統固定附加在最後。',
+      '我專注在關係溝通、人格解析與 AI 自動化應用，協助個人與團隊更理解自己、提升互動品質，並把知識轉化成真正能落地的工具與流程。\n從情感陪伴、課程設計，到 LINE 與表單自動化整合，我希望幫助更多人用更清楚的方式認識自己、連結他人，也讓工作與生活變得更輕盈、更有效率。',
+    highlightsTitle: '服務重點',
+    highlights: ['關係溝通與互動優化陪伴', '人格解析與自我理解引導', 'LINE 與表單流程自動化整合'],
+    actionsTitle: '立即行動',
+    actionsDescription: '前兩顆按鈕可持續更新，第三顆分享按鈕由系統固定保留。',
     sharePanelTitle: '分享說明',
   },
   actions: [
     {
       id: 'contact',
-      label: '聯絡',
-      url: '#connect',
+      label: '立即聯繫我',
+      url: pendingContactUrl,
       tone: 'primary',
       enabled: true,
     },
     {
-      id: 'booking',
-      label: '預約',
-      url: '#booking',
+      id: 'services',
+      label: '查看服務內容',
+      url: pendingServiceUrl,
       tone: 'secondary',
       enabled: true,
     },
   ],
   share: {
-    title: '正式商務電子名片',
-    text: '歡迎透過這張電子名片認識我並進一步聯絡。',
+    title: '蘇彥宇 Sunner｜關係護理室',
+    text: '歡迎透過這張電子名片認識蘇彥宇 Sunner，了解關係護理室的服務內容。',
     buttonLabel: '分享此電子名片給 LINE 好友',
   },
   seo: {
-    title: '正式商務電子名片',
-    description: '正式版 LINE 電子名片，支援 LINE 內分享與網頁相容開啟。',
-    ogTitle: '正式商務電子名片',
-    ogDescription: '正式版 LINE 電子名片，支援 LINE 內分享與網頁相容開啟。',
+    title: '蘇彥宇 Sunner｜關係護理室',
+    description: '關係教練與 AI 自動化講師蘇彥宇 Sunner 的正式電子名片，支援 LINE 分享與網頁相容開啟。',
+    ogTitle: '蘇彥宇 Sunner｜關係護理室',
+    ogDescription: '讓相愛更簡單，讓相處更容易。關係溝通、人格解析與 AI 自動化整合服務。',
     ogImage: 'images/og-placeholder.svg',
   },
 });

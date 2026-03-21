@@ -32,7 +32,10 @@ export const buildCardActionItems = ({
   shareDisabled = false,
   shareLabel = SHARE_BUTTON_LABEL,
 }: BuildCardActionItemsInput): CardActionView[] => [
-  ...actions.map((action) => toLinkAction(action, fallbackUrl)).filter((action): action is Exclude<CardActionView, { kind: 'button' }> => Boolean(action)),
+  ...actions
+    .slice(0, 2)
+    .map((action) => toLinkAction(action, fallbackUrl))
+    .filter((action): action is Exclude<CardActionView, { kind: 'button' }> => Boolean(action)),
   {
     kind: 'button',
     key: 'share',

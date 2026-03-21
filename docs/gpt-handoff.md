@@ -43,13 +43,16 @@
 
 ## 重要規則
 
-- 最後一個按鈕一定是分享按鈕，這是系統規則，不是內容規則
+- 第三顆按鈕一定是分享按鈕，這是系統規則，不是內容規則
+- 目前正式卡內容已套用為蘇彥宇 Sunner / 關係護理室版本
 - `config.actions` 只放一般按鈕，不放分享按鈕
+- 一般按鈕目前最多只保留前兩顆，避免分享按鈕被擠到第四顆之後
 - `/` 目前不是卡片列表首頁，而是直接顯示正式卡
 - `demo-consultant` 目前只是 legacy slug，不是獨立卡內容
 - admin 是 MVP，不可描述成真正 CMS
 - LIFF 初始化只有在 `VITE_LIFF_ID` 存在且當前 URL 位於 `VITE_SITE_URL` Endpoint 範圍內才成立
 - LIFF 不可用時一定要保留 web fallback
+- 前兩顆按鈕正式連結仍待使用者確認，目前是 `#contactUrl` 與 `#serviceUrl` placeholder
 
 ## 哪些東西不能再做回 demo 風格
 
@@ -61,7 +64,8 @@
 
 ## 當前未完成事項
 
-- 正式卡片真實內容尚未填入
+- 前兩顆按鈕正式連結尚未確認
+- 正式主視覺與 OG 圖尚未替換
 - admin 與正式 config 的銜接還沒有真正打通
 - 外部資料來源 adapter 尚未建立
 - Google Sheets backend 尚未開始實作
@@ -79,4 +83,4 @@
 
 ## 若要開新對話，可直接貼上的摘要段落
 
-這個 repo 是 `line-liff-card`，目前已不是多卡 demo 專案，而是單一正式 LINE 電子名片 + `/admin/` 管理頁 MVP。首頁 `/` 直接顯示正式卡，`/card/default/` 是正式 slug，`/card/demo-consultant/` 只是 legacy slug 映射回正式卡。分享按鈕是系統固定追加在最後，不能當一般 action 排序。LIFF 只有在 `VITE_LIFF_ID` 存在且目前 URL 落在 `VITE_SITE_URL` Endpoint 範圍時才會初始化，否則要走 web fallback。admin 目前只能本機編輯、預覽、JSON 匯入匯出與 `localStorage` 暫存，不是真正 CMS。下一步建議先抽出資料來源 adapter，再接 Google Sheets 或其他 backend。
+這個 repo 是 `line-liff-card`，目前已不是多卡 demo 專案，而是單一正式 LINE 電子名片 + `/admin/` 管理頁 MVP。正式卡內容已套用為蘇彥宇 Sunner / 關係護理室版本；首頁 `/` 直接顯示正式卡，`/card/default/` 是正式 slug，`/card/demo-consultant/` 只是 legacy slug 映射回正式卡。前兩顆按鈕目前是 `立即聯繫我` 與 `查看服務內容`，第三顆固定是系統分享按鈕，不能當一般 action 排序；正式連結仍待使用者確認，暫用 `#contactUrl`、`#serviceUrl` placeholder。LIFF 只有在 `VITE_LIFF_ID` 存在且目前 URL 落在 `VITE_SITE_URL` Endpoint 範圍時才會初始化，否則要走 web fallback。admin 目前只能本機編輯、預覽、JSON 匯入匯出與 `localStorage` 暫存，不是真正 CMS。下一步建議先抽出資料來源 adapter，再接 Google Sheets 或其他 backend。

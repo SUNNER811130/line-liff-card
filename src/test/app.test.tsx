@@ -91,8 +91,8 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('品牌名稱')).toBeInTheDocument();
-      expect(screen.getByText('姓名')).toBeInTheDocument();
+      expect(screen.getByText('關係護理室')).toBeInTheDocument();
+      expect(screen.getByText('蘇彥宇 Sunner')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '分享此電子名片給 LINE 好友' })).toBeInTheDocument();
     });
   });
@@ -105,7 +105,7 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('電子名片管理')).toBeInTheDocument();
       expect(screen.getByText('身分與主視覺')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('品牌名稱')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('關係護理室')).toBeInTheDocument();
     });
   });
 
@@ -115,8 +115,8 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('正式商務電子名片').length).toBeGreaterThan(0);
-      expect(screen.getByText('職稱')).toBeInTheDocument();
+      expect(screen.getAllByText('讓相愛更簡單，讓相處更容易').length).toBeGreaterThan(0);
+      expect(screen.getByText('關係教練｜AI 自動化講師')).toBeInTheDocument();
     });
   });
 
@@ -126,7 +126,7 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('正式商務電子名片').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('讓相愛更簡單，讓相處更容易').length).toBeGreaterThan(0);
       expect(screen.queryByText('Demo Consultant Studio')).not.toBeInTheDocument();
     });
   });

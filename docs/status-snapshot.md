@@ -37,15 +37,32 @@
 
 ## 目前阻塞點
 
-- backend `health` 可回應，但 Script Properties 尚未完整初始化
-- `initBackend` 已能進入新版 bootstrap 流程，但 Google 端回 `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
-- 在確認正確 Google Sheet ID 或該 Sheet 已共享給部署帳號 `sunner811130@gmail.com` 前，無法完成 default seed、`/admin/` 正式 load/save、前台 remote config 驗證
+- 正式 `clasp` 綁定的 scriptId 為 `1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
+- 正式 deployment `AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA` 已更新到 version 7
+- shell env、`.env.local`、`.env.production`、deployment URL 都已對齊同一支正式 GAS
+- 真正阻塞點不是前端 URL、不是 `.clasp.json`、也不是舊 deployment；而是這支正式 Web App 在存取正式 Sheet `1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg` 時，Google 端持續回 `Illegal spreadsheet id or key`
+- `initBackend` 與 `getCard(default)` 目前都因同一個 Sheet access error 失敗，因此仍無法完成 default seed、`/admin/` 正式 load/save、前台 remote config 驗證
+
+## 最新驗證
+
+- `clasp show-authorized-user`
+  - `sunner811130@gmail.com`
+- `GET /exec?action=health`
+  - 現在已改成真實檢查 Sheet 可存取性
+  - live 回應：
+    - `ok: false`
+    - `sheetAccessible: false`
+    - `error: Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- `GET /exec?action=getCard&slug=default`
+  - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- `POST initBackend`
+  - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 
 ## 仍需人工確認
 
-- 確認 Google Sheet ID 是否正確
-- 確認該 Sheet 是否可由 Apps Script 部署帳號 `sunner811130@gmail.com` 存取
-- 若使用的是另一份 Sheet，補上正確 ID 後重新執行 backend init/check
+- 確認 `1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg` 真的是 Google 試算表本體 ID，而不是其他 Google Drive 檔案 ID
+- 直接在 Google Apps Script UI 內，以同一個正式專案與同一個帳號執行一次會碰 `SpreadsheetApp.openById()` 的函式，確認 Google 端是否還缺第一次授權
+- 若正式 Sheet 實際 ID 不是這個值，改回正確 ID 後重新執行 backend init/check
 
 ## 驗證目標
 

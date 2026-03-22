@@ -11,9 +11,17 @@ function doGet(e) {
   try {
     var action = getParameter_(e, 'action');
     if (action === ACTION_HEALTH) {
+      var status = getBackendStatus_();
+      if (!status.ready) {
+        return jsonResponse_(false, {
+          action: action,
+          status: status,
+        }, status.error || 'Backend is not ready.');
+      }
+
       return jsonResponse_(true, {
         action: action,
-        status: getBackendStatus_(),
+        status: status,
       });
     }
 
@@ -152,6 +160,13 @@ function getRuntimeSheet_() {
   }
 
   var sheetName = getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME;
+  var sheet = openRuntimeSheetById_(sheetId, sheetName);
+
+  ensureHeaders_(sheet);
+  return sheet;
+}
+
+function openRuntimeSheetById_(sheetId, sheetName) {
   var spreadsheet = SpreadsheetApp.openById(sheetId);
   var sheet = spreadsheet.getSheetByName(sheetName);
 
@@ -159,7 +174,6 @@ function getRuntimeSheet_() {
     throw new Error('Sheet "' + sheetName + '" was not found.');
   }
 
-  ensureHeaders_(sheet);
   return sheet;
 }
 
@@ -330,21 +344,38 @@ function getBackendStatus_() {
   var sheetId = String(getScriptProperty_('CARD_RUNTIME_SHEET_ID') || '').trim();
   var sheetName = String(getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME).trim();
   var writeToken = String(getScriptProperty_('CARD_ADMIN_WRITE_TOKEN') || '').trim();
+  var missingProperties = SCRIPT_PROPERTY_KEYS.filter(function (key) {
+    if (key === 'CARD_RUNTIME_SHEET_NAME') {
+      return false;
+    }
+
+    return !String(getScriptProperty_(key) || '').trim();
+  });
+  var ready = missingProperties.length === 0;
+  var error = '';
+  var sheetAccessible = false;
+
+  if (ready) {
+    try {
+      openRuntimeSheetById_(sheetId, sheetName);
+      sheetAccessible = true;
+    } catch (sheetError) {
+      ready = false;
+      error = toErrorMessage_(sheetError);
+    }
+  }
 
   return {
+    ready: ready,
     configured: {
       sheetId: !!sheetId,
       sheetName: !!sheetName,
       writeToken: !!writeToken,
     },
-    missingProperties: SCRIPT_PROPERTY_KEYS.filter(function (key) {
-      if (key === 'CARD_RUNTIME_SHEET_NAME') {
-        return false;
-      }
-
-      return !String(getScriptProperty_(key) || '').trim();
-    }),
+    missingProperties: missingProperties,
     sheetName: sheetName || DEFAULT_SHEET_NAME,
+    sheetAccessible: sheetAccessible,
+    error: error,
   };
 }
 

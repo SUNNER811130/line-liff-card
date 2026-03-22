@@ -64,12 +64,16 @@ slug | config_json | updated_at | updated_by
 - `npm run test`
 - `npm run lint`
 - `npm run smoke:pages`
+- `npm run provision:google-runtime`
+  - 自動建立 Spreadsheet、Drive folder、bound Apps Script、Script Properties、deployment、exec URL，並更新 `.env.production` / `.env.local`
 - `npm run gas:setup`
-  - 輸出 bound Apps Script 檔案與 Script Properties 提示
+  - 輸出 provision 流程與必要設定
 - `npm run gas:deploy`
   - 輸出部署後檢查方式
 - `npm run gas:check -- https://script.google.com/macros/s/DEPLOYMENT_ID/exec`
   - 驗證 `health` 與 `getCard`
+- `npm run gas:check:admin -- https://script.google.com/macros/s/DEPLOYMENT_ID/exec`
+  - 驗證 `createAdminSession`、`verifyAdminSession`、`saveCard`、`uploadImage`
 
 ## Required Env
 
@@ -79,12 +83,15 @@ VITE_SITE_URL=https://sunner811130.github.io/line-liff-card/
 VITE_CARD_API_BASE_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 ```
 
-## Manual Steps Left
+## Provision Secrets
 
-1. 建立新的正式 Spreadsheet
-2. 在該 Spreadsheet 內開啟 bound Apps Script
-3. 建立或指定一個 Drive upload folder
-4. 貼入 `gas/bound-card-backend` 的檔案
-5. 補 Script Properties
-6. 部署 Web App
-7. 將正式 `/exec` URL 填入 `VITE_CARD_API_BASE_URL`
+自動 provision 會使用 `.env.google.provision.local`，若檔案不存在會自動建立，至少包含：
+
+```bash
+GOOGLE_CLIENT_AUTH=clasprc
+ADMIN_WRITE_SECRET=...
+ADMIN_SESSION_SECRET=...
+ADMIN_SESSION_TTL_SECONDS=3600
+```
+
+Google OAuth 預設直接讀 `~/.clasprc.json` 內既有授權，避免把敏感值寫進 repo。

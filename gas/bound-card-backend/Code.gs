@@ -18,6 +18,47 @@ var SCRIPT_PROPERTY_KEYS = {
 };
 var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
+function setupScriptProperties(options) {
+  var payload = options || {};
+  var scriptProperties = PropertiesService.getScriptProperties();
+  var properties = {};
+  var updatedBy = normalizeUserLabel_(payload.updatedBy || 'codex-provision');
+  var now = new Date().toISOString();
+
+  properties[SCRIPT_PROPERTY_KEYS.adminWriteSecret] = sanitizeBootstrapProperty_(payload.adminWriteSecret, SCRIPT_PROPERTY_KEYS.adminWriteSecret);
+  properties[SCRIPT_PROPERTY_KEYS.adminSessionSecret] = sanitizeBootstrapProperty_(payload.adminSessionSecret, SCRIPT_PROPERTY_KEYS.adminSessionSecret);
+  properties[SCRIPT_PROPERTY_KEYS.adminSessionTtlSeconds] = String(
+    Number(payload.adminSessionTtlSeconds || 3600) || 3600
+  );
+  properties[SCRIPT_PROPERTY_KEYS.driveUploadFolderId] = sanitizeBootstrapProperty_(payload.driveUploadFolderId, SCRIPT_PROPERTY_KEYS.driveUploadFolderId);
+  scriptProperties.setProperties(properties, false);
+
+  var runtime = getRuntimeContext_();
+  var slug = normalizeSlug_(payload.slug) || DEFAULT_RUNTIME_SLUG;
+  var seedConfig = payload.seedConfig;
+  if (!seedConfig || typeof seedConfig !== 'object') {
+    throw new Error('seedConfig is required.');
+  }
+
+  assertCardConfigShape_(seedConfig);
+  if (normalizeSlug_(seedConfig.slug) !== slug) {
+    throw new Error('seedConfig.slug must match slug.');
+  }
+
+  upsertCardRow_(runtime.sheet, slug, JSON.stringify(seedConfig), now, updatedBy);
+
+  return {
+    ok: true,
+    slug: slug,
+    updatedAt: now,
+    updatedBy: updatedBy,
+    spreadsheetId: runtime.spreadsheet.getId(),
+    sheetName: runtime.sheet.getName(),
+    scriptId: ScriptApp.getScriptId(),
+    propertyKeys: Object.keys(properties),
+  };
+}
+
 function doGet(e) {
   try {
     var action = readAction_(e);
@@ -434,6 +475,15 @@ function sanitizeRequiredScriptProperty_(key) {
   }
 
   return String(value).trim();
+}
+
+function sanitizeBootstrapProperty_(value, key) {
+  var trimmed = String(value || '').trim();
+  if (!trimmed) {
+    throw new Error('Missing bootstrap property: ' + key);
+  }
+
+  return trimmed;
 }
 
 function encodeWebSafeString_(value) {

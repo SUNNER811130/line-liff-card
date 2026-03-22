@@ -220,3 +220,40 @@ npm run gas:deploy
   - 通常代表你尚未成功儲存 remote config，或分享時還在吃舊的正式資料來源
 
 repo 現在已提供 scaffold、前端 adapter、CLI 與文件，但不會假裝已自動替你完成 Google 端授權或已成功部署。
+
+## 12. 2026-03-22 最終排錯狀態
+
+- 正式 standalone GAS `scriptId`
+  - `1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
+- 正式 Web App deployment
+  - `AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA`
+  - 已 redeploy 到 version 8
+- 正式 runtime sheet
+  - `SHEET_ID=1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+  - `SHEET_NAME=cards_runtime`
+- manifest 最小必要 scopes
+  - `https://www.googleapis.com/auth/spreadsheets`
+  - `https://www.googleapis.com/auth/drive.readonly`
+- `debugOpenSheet()` 已存在於正式 GAS，用途是驗證：
+  - sheet id 原值、trim 後、清理 zero-width 後是否一致
+  - `DriveApp.getFileById(cleanId)` 是否可讀到正式檔案
+  - `SpreadsheetApp.openById(cleanId)` 是否可開到正式 Spreadsheet
+  - `getSheetByName(sheetName)` 是否可找到 `cards_runtime`
+- 如果 CLI 執行 `clasp run debugOpenSheet` 出現：
+  - `Unable to run script function. Please make sure you have permission to run the script function.`
+  - 代表真正剩下的是 Google 端授權/執行權限，而不是 repo 端未 push
+
+此時唯一正確的人工步驟：
+
+1. 到目前 `.clasp.json` 綁定的正式 Apps Script editor
+2. 選擇並執行 `debugOpenSheet()`
+3. 在 Google 權限畫面同意 Spreadsheet 與 Drive 存取
+4. 確認理想結果為：
+   - `driveFileName = LIFF Card Runtime`
+   - `spreadsheetName = LIFF Card Runtime`
+   - `sheetExists = true`
+5. 完成後再重新執行：
+   - `npm run gas:deploy`
+   - `./scripts/check-runtime-backend.sh https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+
+在這個人工授權完成前，`health` / `initBackend` / `getCard(default)`、`/admin/` 真實 save/load、前台 remote config 與分享 Flex 的 live 驗證都會持續被同一個 Sheet access error 卡住。

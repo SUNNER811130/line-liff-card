@@ -208,6 +208,45 @@ function setupScriptProperties(input) {
   };
 }
 
+function debugOpenSheet() {
+  var rawId = String(getScriptProperty_('CARD_RUNTIME_SHEET_ID') || '');
+  var trimmedId = rawId.trim();
+  var cleanId = sanitizeSheetId_(trimmedId);
+  var sheetName = String(getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME).trim() || DEFAULT_SHEET_NAME;
+  var result = {
+    ok: true,
+    rawId: rawId,
+    rawIdJson: JSON.stringify(rawId),
+    rawIdLength: rawId.length,
+    trimmedId: trimmedId,
+    trimmedIdLength: trimmedId.length,
+    cleanId: cleanId,
+    cleanIdLength: cleanId.length,
+    sheetName: sheetName,
+    driveFileName: null,
+    spreadsheetName: null,
+    sheetExists: false,
+  };
+
+  try {
+    result.driveFileName = DriveApp.getFileById(cleanId).getName();
+  } catch (error) {
+    result.ok = false;
+    result.driveError = toErrorMessage_(error);
+  }
+
+  try {
+    var spreadsheet = SpreadsheetApp.openById(cleanId);
+    result.spreadsheetName = spreadsheet.getName();
+    result.sheetExists = !!spreadsheet.getSheetByName(sheetName);
+  } catch (error) {
+    result.ok = false;
+    result.spreadsheetError = toErrorMessage_(error);
+  }
+
+  return result;
+}
+
 function initBackend(input) {
   var payload = input || {};
   if (payload.sheetId || payload.writeToken) {
@@ -313,6 +352,10 @@ function getParameter_(e, key) {
 
 function getScriptProperty_(key) {
   return PropertiesService.getScriptProperties().getProperty(key);
+}
+
+function sanitizeSheetId_(value) {
+  return String(value || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 }
 
 function canBootstrapBackend_(payload) {

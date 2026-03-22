@@ -1,30 +1,15 @@
 import { assertCardConfig } from '../content/cards/schema';
 import type { CardConfig } from '../content/cards/types';
 import { defaultCardSlug, getBundledCardBySlug, primaryCard } from '../content/cards';
+import {
+  buildCardApiUrl,
+  extractConfigFromEnvelope,
+  getCardApiErrorMessage,
+  readCardApiJsonResponse,
+} from './card-admin-api';
 import { getCanonicalCardSlug } from './routes';
 
 type FetchLike = typeof fetch;
-
-type CardApiSuccessEnvelope = {
-  ok: true;
-  slug?: string;
-  updatedAt?: string;
-  source?: string;
-  config?: unknown;
-  card?: unknown;
-  data?: {
-    config?: unknown;
-    card?: unknown;
-  };
-};
-
-type CardApiErrorEnvelope = {
-  ok?: false;
-  error?: string;
-  message?: string;
-};
-
-type CardApiEnvelope = CardApiSuccessEnvelope | CardApiErrorEnvelope;
 
 export type RuntimeCardResult = {
   config: CardConfig;
@@ -44,42 +29,6 @@ export const getCardApiBaseUrl = (): string => import.meta.env.VITE_CARD_API_BAS
 
 const normalizeBaseUrl = (baseUrl?: string): string => baseUrl?.trim() ?? '';
 
-const extractConfigFromEnvelope = (payload: CardApiEnvelope): unknown =>
-  'config' in payload && payload.config !== undefined
-    ? payload.config
-    : 'card' in payload && payload.card !== undefined
-      ? payload.card
-      : 'data' in payload && payload.data?.config !== undefined
-        ? payload.data.config
-        : 'data' in payload
-          ? payload.data?.card
-          : undefined;
-
-const readJsonResponse = async (response: Response): Promise<CardApiEnvelope> => {
-  const text = await response.text();
-  if (!text) {
-    throw new Error('後台沒有回傳 JSON 內容。');
-  }
-
-  try {
-    return JSON.parse(text) as CardApiEnvelope;
-  } catch {
-    throw new Error('後台回傳的內容不是有效 JSON。');
-  }
-};
-
-const getRemoteErrorMessage = (payload: CardApiEnvelope, fallback: string): string => {
-  if ('error' in payload && payload.error) {
-    return payload.error;
-  }
-
-  if ('message' in payload && payload.message) {
-    return payload.message;
-  }
-
-  return fallback;
-};
-
 const validateRemoteConfig = (config: unknown, expectedSlug: string): CardConfig => {
   assertCardConfig(config);
 
@@ -89,15 +38,6 @@ const validateRemoteConfig = (config: unknown, expectedSlug: string): CardConfig
 
   return config;
 };
-
-const buildApiUrl = (baseUrl: string, params: Record<string, string>): string => {
-  const url = new URL(baseUrl);
-  Object.entries(params).forEach(([key, value]) => {
-    url.searchParams.set(key, value);
-  });
-  return url.toString();
-};
-
 export const getBundledRuntimeCard = (slug: string): CardConfig | undefined =>
   getBundledCardBySlug(getCanonicalCardSlug(slug));
 
@@ -117,14 +57,14 @@ export async function fetchRemoteCardConfig(
     throw new Error('未設定正式後台 API Base URL。');
   }
 
-  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(buildApiUrl(baseUrl, { action: 'getCard', slug: expectedSlug }), {
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(buildCardApiUrl(baseUrl, { action: 'getCard', slug: expectedSlug }), {
     method: 'GET',
     signal: options.signal,
   });
-  const payload = await readJsonResponse(response);
+  const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {
-    throw new Error(getRemoteErrorMessage(payload, `載入正式資料失敗（${response.status}）。`));
+    throw new Error(getCardApiErrorMessage(payload, `載入正式資料失敗（${response.status}）。`));
   }
 
   const remoteConfig = extractConfigFromEnvelope(payload);
@@ -199,10 +139,10 @@ export async function saveRemoteCardConfig(
       updatedBy: options.updatedBy?.trim() ?? '',
     }),
   });
-  const payload = await readJsonResponse(response);
+  const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {
-    throw new Error(getRemoteErrorMessage(payload, `儲存正式資料失敗（${response.status}）。`));
+    throw new Error(getCardApiErrorMessage(payload, `儲存正式資料失敗（${response.status}）。`));
   }
 
   const responseConfig = extractConfigFromEnvelope(payload) ?? validatedConfig;

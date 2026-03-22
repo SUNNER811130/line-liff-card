@@ -1,11 +1,15 @@
 # Apps Script Card Admin Web App
 
-這個 scaffold 提供 `line-liff-card` Phase 2 正式後台需要的最小可用 backend：
+這個 scaffold 提供 `line-liff-card` 正式後台需要的可部署 backend：
 
 - `GET ?action=getCard&slug=default`
+- `GET ?action=health`
 - `POST { action: "saveCard", slug, config, writeToken, updatedBy }`
+- `POST { action: "initBackend", writeToken, config, slug, force, seedDefault }`
 - Google Sheets 儲存整份 `CardConfig JSON`
 - Script Properties 管理 sheet id / sheet name / write token
+- `setupScriptProperties()` 可配合 `clasp run` 自動設定 Script Properties
+- `initBackend()` 可自動補齊表頭並在缺資料時寫入 bundled `default` 記錄
 
 ## 需要的 Google Sheet
 
@@ -29,26 +33,48 @@ CARD_ADMIN_WRITE_TOKEN=自行產生的長隨機字串
 
 `CARD_RUNTIME_SHEET_NAME` 可省略，預設就是 `cards_runtime`。
 
+## Repo 內自動化腳本
+
+- [scripts/setup-gas.sh](/home/usersun/projects/line-liff-card/scripts/setup-gas.sh)
+  - 檢查 `clasp`
+  - 檢查 `clasp login`
+  - 建立或連接 `.clasp.json`
+- [scripts/deploy-gas.sh](/home/usersun/projects/line-liff-card/scripts/deploy-gas.sh)
+  - `clasp push`
+  - `clasp run setupScriptProperties`
+  - `clasp version`
+  - `clasp deploy`
+  - `initBackend`
+  - backend health check
+- [scripts/init-runtime-sheet.mjs](/home/usersun/projects/line-liff-card/scripts/init-runtime-sheet.mjs)
+  - 對 Web App 送 `initBackend`
+- [scripts/check-runtime-backend.sh](/home/usersun/projects/line-liff-card/scripts/check-runtime-backend.sh)
+  - 驗證 `health`
+  - 驗證 `getCard`
+  - 若有 token，再驗證 `initBackend` POST
+
 ## 部署步驟
 
 1. 在 Google Drive 建立 Google Sheet。
 2. 開一個新的 Apps Script 專案。
 3. 將 `Code.gs` 與 `appsscript.json` 貼進去。
-4. 到 `Project Settings -> Script Properties` 設定上述三個值。
-5. 執行一次 `doGet` 或手動跑任一函式，完成授權。
-6. `Deploy -> New deployment -> Web app`
-7. `Execute as`: `Me`
-8. `Who has access`: `Anyone`
-9. 複製部署後的 `/exec` URL，填到前端 `VITE_CARD_API_BASE_URL` 或 `/admin/` 的 API Base URL 欄位。
+4. 先執行 [scripts/setup-gas.sh](/home/usersun/projects/line-liff-card/scripts/setup-gas.sh) 建立 `.clasp.json`。
+5. 匯出：
+   - `CARD_RUNTIME_SHEET_ID`
+   - `CARD_RUNTIME_SHEET_NAME`
+   - `CARD_ADMIN_WRITE_TOKEN`
+6. 執行 [scripts/deploy-gas.sh](/home/usersun/projects/line-liff-card/scripts/deploy-gas.sh)。
+7. 若 `clasp run setupScriptProperties` 或 Web App 部署失敗，通常代表仍需你本人完成 Google 授權、Apps Script API / Execution API 啟用，或第一次在 Google 介面中確認權限。
+8. 複製部署後的 `/exec` URL，填到前端 `VITE_CARD_API_BASE_URL` 或 `/admin/` 的 API Base URL 欄位。
 
 ## 初始化正式卡資料
 
-建議先把目前 repo 的 bundled `defaultCard` JSON 貼進 `config_json`，並將 `slug` 填 `default`。
+現在可用 [scripts/init-runtime-sheet.mjs](/home/usersun/projects/line-liff-card/scripts/init-runtime-sheet.mjs) 或 `initBackend()`：
 
-之後 `/admin/` 便可：
-
-- `載入正式資料`：讀這列 JSON
-- `儲存到正式後台`：覆蓋同一列 JSON，並更新 `updated_at` / `updated_by`
+- 首次建立表頭
+- 若 `default` 不存在，寫入 bundled default config
+- 若已有正式資料，預設不覆蓋
+- 只有加 `force=true` 才會覆蓋既有 `default`
 
 ## 前端設定
 
@@ -61,7 +87,13 @@ CARD_ADMIN_WRITE_TOKEN=自行產生的長隨機字串
 
 ## API 範例
 
-### GET
+### GET health
+
+```text
+GET https://script.google.com/macros/s/DEPLOYMENT_ID/exec?action=health
+```
+
+### GET card
 
 ```text
 GET https://script.google.com/macros/s/DEPLOYMENT_ID/exec?action=getCard&slug=default
@@ -96,6 +128,22 @@ GET https://script.google.com/macros/s/DEPLOYMENT_ID/exec?action=getCard&slug=de
 }
 ```
 
+### POST initBackend
+
+```json
+{
+  "action": "initBackend",
+  "slug": "default",
+  "writeToken": "YOUR_WRITE_TOKEN",
+  "updatedBy": "deploy-gas.sh",
+  "seedDefault": true,
+  "force": false,
+  "config": {
+    "...": "整份 CardConfig"
+  }
+}
+```
+
 ## 安全原則
 
 - 真正的 write secret 只放在 Script Properties
@@ -106,9 +154,10 @@ GET https://script.google.com/macros/s/DEPLOYMENT_ID/exec?action=getCard&slug=de
 ## 仍需人工完成的事
 
 - 建立 Google Sheet
-- 建立 Apps Script 專案
-- 設 Script Properties
-- 手動部署 Web App
+- 第一次 `clasp login`
+- 第一次 Google OAuth 授權
+- 必要時啟用 Apps Script API / Execution API
+- 第一次在 Google 端確認 Web App 權限
 - 把 `/exec` URL 填入正式環境或 admin 頁面
 
-repo 內只提供可直接貼上部署的 scaffold，不會假裝已替你完成 Google 端部署。
+repo 內現在提供可直接推上去的 scaffold 與 CLI，但不會假裝已替你完成 Google 端授權或部署成功。

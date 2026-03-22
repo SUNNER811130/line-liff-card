@@ -1,11 +1,22 @@
 var ACTION_GET_CARD = 'getCard';
 var ACTION_SAVE_CARD = 'saveCard';
+var ACTION_INIT_BACKEND = 'initBackend';
+var ACTION_HEALTH = 'health';
 var DEFAULT_SHEET_NAME = 'cards_runtime';
+var DEFAULT_RUNTIME_SLUG = 'default';
 var REQUIRED_COLUMNS = ['slug', 'config_json', 'updated_at', 'updated_by'];
+var SCRIPT_PROPERTY_KEYS = ['CARD_RUNTIME_SHEET_ID', 'CARD_RUNTIME_SHEET_NAME', 'CARD_ADMIN_WRITE_TOKEN'];
 
 function doGet(e) {
   try {
     var action = getParameter_(e, 'action');
+    if (action === ACTION_HEALTH) {
+      return jsonResponse_(true, {
+        action: action,
+        status: getBackendStatus_(),
+      });
+    }
+
     if (action !== ACTION_GET_CARD) {
       return jsonResponse_(false, null, 'Unsupported action.');
     }
@@ -38,18 +49,26 @@ function doGet(e) {
 function doPost(e) {
   try {
     var payload = parseRequestBody_(e);
+    if (payload.action === ACTION_INIT_BACKEND) {
+      verifyWriteToken_(payload.writeToken);
+      var initResult = initBackend(payload);
+      return jsonResponse_(true, {
+        action: ACTION_INIT_BACKEND,
+        initialized: true,
+        seededDefault: initResult.seededDefault,
+        replacedExisting: initResult.replacedExisting,
+        updatedAt: initResult.updatedAt,
+        slug: initResult.slug,
+        config: initResult.config,
+        status: getBackendStatus_(),
+      });
+    }
+
     if (payload.action !== ACTION_SAVE_CARD) {
       return jsonResponse_(false, null, 'Unsupported action.');
     }
 
-    var writeToken = getScriptProperty_('CARD_ADMIN_WRITE_TOKEN');
-    if (!writeToken) {
-      throw new Error('CARD_ADMIN_WRITE_TOKEN is not configured.');
-    }
-
-    if (String(payload.writeToken || '') !== writeToken) {
-      return jsonResponse_(false, null, 'Invalid write token.');
-    }
+    verifyWriteToken_(payload.writeToken);
 
     var slug = normalizeSlug_(payload.slug);
     if (!slug) {
@@ -142,6 +161,87 @@ function getRuntimeSheet_() {
   return sheet;
 }
 
+function setupScriptProperties(input) {
+  var payload = input || {};
+  var sheetId = String(payload.sheetId || '').trim();
+  var sheetName = String(payload.sheetName || DEFAULT_SHEET_NAME).trim();
+  var writeToken = String(payload.writeToken || '').trim();
+
+  if (!sheetId) {
+    throw new Error('sheetId is required.');
+  }
+
+  if (!writeToken) {
+    throw new Error('writeToken is required.');
+  }
+
+  var properties = PropertiesService.getScriptProperties();
+  properties.setProperties(
+    {
+      CARD_RUNTIME_SHEET_ID: sheetId,
+      CARD_RUNTIME_SHEET_NAME: sheetName || DEFAULT_SHEET_NAME,
+      CARD_ADMIN_WRITE_TOKEN: writeToken,
+    },
+    true,
+  );
+
+  return {
+    ok: true,
+    scriptPropertiesUpdated: true,
+    status: getBackendStatus_(),
+  };
+}
+
+function initBackend(input) {
+  var payload = input || {};
+  if (payload.sheetId || payload.writeToken) {
+    setupScriptProperties(payload);
+  }
+
+  var slug = normalizeSlug_(payload.slug) || DEFAULT_RUNTIME_SLUG;
+  var seedDefault = payload.seedDefault !== false;
+  var force = payload.force === true;
+  var updatedBy = String(payload.updatedBy || 'initBackend').trim();
+  var updatedAt = new Date().toISOString();
+  var config = payload.config;
+  var seededDefault = false;
+  var replacedExisting = false;
+
+  var sheet = getRuntimeSheet_();
+  if (seedDefault) {
+    if (!config) {
+      throw new Error('config is required when seedDefault is true.');
+    }
+
+    assertCardConfigShape_(config);
+    if (String(config.slug || '') !== slug) {
+      throw new Error('config.slug must match slug.');
+    }
+
+    var existing = getCardRowBySlug_(slug);
+    if (!existing) {
+      saveCardRow_(slug, JSON.stringify(config), updatedAt, updatedBy);
+      seededDefault = true;
+    } else if (force) {
+      saveCardRow_(slug, JSON.stringify(config), updatedAt, updatedBy);
+      seededDefault = true;
+      replacedExisting = true;
+    }
+  }
+
+  return {
+    ok: true,
+    initialized: true,
+    slug: slug,
+    config: config || null,
+    updatedAt: updatedAt,
+    seededDefault: seededDefault,
+    replacedExisting: replacedExisting,
+    status: getBackendStatus_(),
+    sheetName: sheet.getName(),
+  };
+}
+
 function ensureHeaders_(sheet) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(REQUIRED_COLUMNS);
@@ -199,8 +299,43 @@ function getScriptProperty_(key) {
   return PropertiesService.getScriptProperties().getProperty(key);
 }
 
+function verifyWriteToken_(candidateToken) {
+  var writeToken = getScriptProperty_('CARD_ADMIN_WRITE_TOKEN');
+  if (!writeToken) {
+    throw new Error('CARD_ADMIN_WRITE_TOKEN is not configured.');
+  }
+
+  if (String(candidateToken || '').trim() !== writeToken) {
+    throw new Error('Invalid write token.');
+  }
+
+  return true;
+}
+
 function normalizeSlug_(slug) {
   return String(slug || '').replace(/^\/+|\/+$/g, '').trim();
+}
+
+function getBackendStatus_() {
+  var sheetId = String(getScriptProperty_('CARD_RUNTIME_SHEET_ID') || '').trim();
+  var sheetName = String(getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME).trim();
+  var writeToken = String(getScriptProperty_('CARD_ADMIN_WRITE_TOKEN') || '').trim();
+
+  return {
+    configured: {
+      sheetId: !!sheetId,
+      sheetName: !!sheetName,
+      writeToken: !!writeToken,
+    },
+    missingProperties: SCRIPT_PROPERTY_KEYS.filter(function (key) {
+      if (key === 'CARD_RUNTIME_SHEET_NAME') {
+        return false;
+      }
+
+      return !String(getScriptProperty_(key) || '').trim();
+    }),
+    sheetName: sheetName || DEFAULT_SHEET_NAME,
+  };
 }
 
 function assertCardConfigShape_(config) {

@@ -2,7 +2,7 @@
 
 ## 專案一句話
 
-這是單一正式卡 `default` 的 LINE 電子名片站，現在已完成 Phase 2：前台與 `/admin/` 都能透過 remote `CardConfig` 運作，但遠端失敗時仍安全 fallback 到 bundled config。
+這是單一正式卡 `default` 的 LINE 電子名片站。現在前台與 `/admin/` 都能透過 remote `CardConfig` 運作，repo 內也已補上最大程度自動化的 Google Sheets + Apps Script 部署腳本；但 Google 端授權仍不能假裝自動完成。
 
 ## 先確認的產品規則
 
@@ -25,6 +25,11 @@
   - [src/components/AdminPage.tsx](/home/usersun/projects/line-liff-card/src/components/AdminPage.tsx)
 - share / Flex：
   - [src/lib/share.ts](/home/usersun/projects/line-liff-card/src/lib/share.ts)
+- GAS deploy scripts：
+  - [scripts/setup-gas.sh](/home/usersun/projects/line-liff-card/scripts/setup-gas.sh)
+  - [scripts/deploy-gas.sh](/home/usersun/projects/line-liff-card/scripts/deploy-gas.sh)
+  - [scripts/init-runtime-sheet.mjs](/home/usersun/projects/line-liff-card/scripts/init-runtime-sheet.mjs)
+  - [scripts/check-runtime-backend.sh](/home/usersun/projects/line-liff-card/scripts/check-runtime-backend.sh)
 
 ## 現在的正式資料路徑
 
@@ -63,5 +68,11 @@ scaffold：
 
 - [gas/card-admin-webapp/Code.gs](/home/usersun/projects/line-liff-card/gas/card-admin-webapp/Code.gs)
 - [gas/card-admin-webapp/README.md](/home/usersun/projects/line-liff-card/gas/card-admin-webapp/README.md)
+- `Code.gs` 已支援：
+  - `action=health`
+  - `action=getCard`
+  - `action=saveCard`
+  - `action=initBackend`
+  - `setupScriptProperties()`
 
-Google 端部署仍需人工完成，不要描述成 repo 已自動部署成功。
+Google 端部署與授權仍需人工完成，不要描述成 repo 已自動部署成功。

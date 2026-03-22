@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultCard } from '../content/cards/default';
+import { cloneCardConfig } from '../content/cards/draft';
 
 describe('share helpers', () => {
   beforeEach(() => {
@@ -70,5 +71,29 @@ describe('share helpers', () => {
 
     expect(window.location.search).toBe('');
     expect(window.sessionStorage.getItem('line-liff-card:share-intent:pending')).toBeNull();
+  });
+
+  it('builds flex content from the current runtime config instead of hardcoded bundled text', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    const runtimeConfig = cloneCardConfig(defaultCard);
+    runtimeConfig.content.fullName = 'Runtime 名稱';
+    runtimeConfig.content.brandName = 'Runtime 品牌';
+    runtimeConfig.photo.src = 'https://cdn.example.test/runtime-hero.jpg';
+    runtimeConfig.actions[0].label = 'Runtime 第一按鈕';
+    const { buildFlexMessage } = await import('../lib/share');
+
+    const message = buildFlexMessage(
+      runtimeConfig,
+      'https://liff.line.me/mock-permalink',
+      'https://example.test/card/default/',
+    );
+
+    expect(message.altText).toBe('Runtime 名稱｜Runtime 品牌');
+    expect(message.contents.hero.url).toBe('https://cdn.example.test/runtime-hero.jpg');
+    expect(message.contents.footer.contents[0]).toMatchObject({
+      action: {
+        label: 'Runtime 第一按鈕',
+      },
+    });
   });
 });

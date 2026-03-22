@@ -88,6 +88,17 @@ export function AdminPage() {
         },
   );
 
+  const apiUrlStatus = apiBaseUrl.trim()
+    ? apiBaseUrl.trim() === getCardApiBaseUrl()
+      ? '已載入 env 內的正式後台 URL'
+      : '目前使用手動輸入的正式後台 URL'
+    : '尚未設定正式後台 URL';
+  const tokenStatus = writeToken.trim()
+    ? rememberTokenInSession
+      ? 'write token 已輸入，且只暫存在目前 sessionStorage'
+      : 'write token 已輸入，但關閉頁面後不會保留'
+    : '尚未輸入 write token';
+
   useEffect(() => {
     applyBasicSeo(adminTitle, adminDescription);
   }, []);
@@ -354,6 +365,8 @@ export function AdminPage() {
               <p className="support-copy admin-field-hint">
                 前端不會內建真正 write secret。若勾選，上述 token 只會暫存於目前分頁 sessionStorage。
               </p>
+              <p className="support-copy admin-field-hint">{`API URL 狀態：${apiUrlStatus}`}</p>
+              <p className="support-copy admin-field-hint">{`Token 狀態：${tokenStatus}`}</p>
             </div>
             <div className="admin-inline-actions">
               <button type="button" className="action-button action-button-secondary" onClick={handleLoadRemote}>

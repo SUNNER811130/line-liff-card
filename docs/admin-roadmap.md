@@ -2,12 +2,13 @@
 
 ## 現況
 
-Phase 2 已完成：
+目前 Phase 2 正式後台資料流已完成，而且 deployment automation 已補齊到可由 CLI 代跑大部分流程：
 
 - `/admin/` 可讀寫正式後台資料
 - 前台卡頁會優先讀 remote config
 - share / Flex 流程與畫面共用同一份 runtime config
 - 失敗時 fallback 到 bundled `defaultCard`
+- repo 內已有 `clasp` setup / push / deploy / health check / runtime sheet init 腳本
 
 ## 已採用的 Phase 2 方案
 
@@ -16,12 +17,23 @@ Phase 2 已完成：
 - Apps Script Web App 作為安全中介層
 - repo 內沿用 `CardConfig` / schema / view-model
 
-## Phase 2 還有哪些人工步驟
+## Phase 2 仍有哪些人工步驟
 
-1. 建立 Google Sheet
-2. 部署 Apps Script Web App
-3. 設定 Script Properties
-4. 把 `/exec` URL 填入正式環境 `VITE_CARD_API_BASE_URL`
+1. 安裝並登入 `clasp`
+2. 建立 Google Sheet
+3. 第一次 Google OAuth / Apps Script 授權
+4. 必要時啟用 Apps Script API / Execution API
+5. 把 `/exec` URL 填入正式環境 `VITE_CARD_API_BASE_URL`
+
+## CLI 可自動完成什麼
+
+- 連接或建立 Apps Script 專案
+- `clasp push`
+- `clasp run setupScriptProperties`
+- `clasp version`
+- `clasp deploy`
+- 呼叫 `initBackend`
+- 驗證 `health` / `getCard` / `initBackend`
 
 ## Phase 3 候選方向
 

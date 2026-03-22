@@ -12,6 +12,8 @@ test -r dist/card/default/index.html
 test -r dist/card/demo-consultant/index.html
 grep -q '<div id="root"></div>' dist/index.html
 grep -q '<div id="root"></div>' dist/admin/index.html
+rg -q 'getCard|action:"getCard"' dist/assets
+rg -q '正式後台|電子名片管理' dist/assets
 if rg -n "example\\.com|line\\.ee/example|alex@example\\.com" dist; then
   echo "placeholder links still exist in dist"
   exit 1

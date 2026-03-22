@@ -51,6 +51,7 @@ describe('AdminPage', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('正式遠端名片')).toBeInTheDocument();
       expect(screen.getByText('已載入 slug「default」的正式後台資料。')).toBeInTheDocument();
+      expect(screen.getByText('API URL 狀態：已載入 env 內的正式後台 URL')).toBeInTheDocument();
     });
   });
 
@@ -131,5 +132,19 @@ describe('AdminPage', () => {
     expect(
       screen.getByText('本地草稿會自動存到此瀏覽器 localStorage；只有按「儲存到正式後台」才會更新正式電子名片內容。'),
     ).toBeInTheDocument();
+  });
+
+  it('shows token persistence state clearly', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    expect(screen.getByText('Token 狀態：尚未輸入 write token')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Write Token'), 'token-xyz');
+    expect(screen.getByText('Token 狀態：write token 已輸入，但關閉頁面後不會保留')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('只在 sessionStorage 暫存 token'));
+    expect(screen.getByText('Token 狀態：write token 已輸入，且只暫存在目前 sessionStorage')).toBeInTheDocument();
   });
 });

@@ -3,3 +3,6 @@ dist
 coverage
 .DS_Store
 *.local
+.clasp.json
+gas/card-admin-webapp/.clasp.json
+gas/card-admin-webapp/.deployment.json

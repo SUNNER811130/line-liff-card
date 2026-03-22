@@ -1,16 +1,18 @@
 # line-liff-card
 
-以 Vite、React、TypeScript 建立的 LINE 電子名片站。現在已升級成 Phase 2 架構：
+以 Vite、React、TypeScript 建立的 LINE 電子名片站。現在 repo 已補齊到「GitHub Pages 前台 + Google Sheets + Apps Script 正式後台」的最大程度自動化部署狀態。
 
 - GitHub Pages 繼續提供前台卡片頁與 `/admin/`
-- 正式內容可從遠端資料來源讀取
+- 正式內容優先從 Google Sheets + Apps Script Web App 讀取
 - `/admin/` 可載入 / 儲存正式 `CardConfig`
 - 遠端失敗時安全 fallback 到 repo 內 bundled config
+- repo 內提供 `clasp` / Apps Script / runtime sheet 初始化 / health check 自動化腳本
 
 ## Requirements
 
 - Node.js 20+
 - npm 10+
+- `clasp` 需要由使用者本人安裝並登入 Google 帳號
 
 ## Scripts
 
@@ -20,6 +22,11 @@
 - `npm run test`
 - `npm run lint`
 - `npm run smoke:pages`
+- `npm run gas:setup`
+- `npm run gas:login`
+- `npm run gas:push`
+- `npm run gas:deploy`
+- `npm run gas:check`
 
 ## Routes
 
@@ -51,6 +58,23 @@ bundled fallback：
 runtime adapter：
 
 - `src/lib/card-source.ts`
+
+## 為什麼不是 GitHub Pages 直接當後台
+
+GitHub Pages 只能靜態託管，不能安全接收 `/admin/` 的正式寫入：
+
+- 前端不能直接改 repo
+- 前端不能保存真正 write secret
+- 不能把 Google / GitHub 權限直接交給公開網頁
+
+所以正式後台需要一個可驗證 token、可寫 Google Sheet、又不必另外架伺服器的中介層。
+
+## 為什麼用 Google Sheets + Apps Script
+
+- Google Sheets 適合目前單卡 `CardConfig JSON` 的正式營運資料
+- Apps Script Web App 可提供 `getCard` / `saveCard` / `initBackend` / `health`
+- 使用者本人用 Google 帳號授權即可，不需要捏造 service account 流程
+- 對目前規模比重做 DB / CMS 更輕
 
 ## Remote Content Source
 
@@ -101,6 +125,11 @@ repo 內已提供可直接部署的 scaffold：
 - [gas/card-admin-webapp/Code.gs](/home/usersun/projects/line-liff-card/gas/card-admin-webapp/Code.gs)
 - [gas/card-admin-webapp/appsscript.json](/home/usersun/projects/line-liff-card/gas/card-admin-webapp/appsscript.json)
 - [gas/card-admin-webapp/README.md](/home/usersun/projects/line-liff-card/gas/card-admin-webapp/README.md)
+- [scripts/setup-gas.sh](/home/usersun/projects/line-liff-card/scripts/setup-gas.sh)
+- [scripts/deploy-gas.sh](/home/usersun/projects/line-liff-card/scripts/deploy-gas.sh)
+- [scripts/init-runtime-sheet.mjs](/home/usersun/projects/line-liff-card/scripts/init-runtime-sheet.mjs)
+- [scripts/check-runtime-backend.sh](/home/usersun/projects/line-liff-card/scripts/check-runtime-backend.sh)
+- [.clasp.json.template](/home/usersun/projects/line-liff-card/.clasp.json.template)
 
 建議的正式資料儲存方式：
 
@@ -110,6 +139,21 @@ repo 內已提供可直接部署的 scaffold：
   - `config_json`
   - `updated_at`
   - `updated_by`
+
+Apps Script 現在具備：
+
+- `doGet`
+  - `action=health`
+  - `action=getCard`
+- `doPost`
+  - `action=saveCard`
+  - `action=initBackend`
+- `setupScriptProperties()`
+  - 配合 `clasp run` 設定 Script Properties
+- `initBackend()`
+  - 建立表頭
+  - 可在 `default` 缺資料時寫入 bundled seed
+  - 不會覆蓋既有正式資料，除非 `force=true`
 
 ## Env
 
@@ -126,6 +170,42 @@ VITE_CARD_API_BASE_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 - `VITE_CARD_API_BASE_URL` 可以放公開 Web App URL
 - 不要把真正 write token 放在前端 env
 - write token 由 `/admin/` 使用者手動輸入，必要時只暫存到 `sessionStorage`
+
+## 哪些步驟 Codex / CLI 可以做
+
+- 掃描 repo 目前狀態
+- 建立 `.clasp.json`
+- `clasp push`
+- 建 version
+- 建立或更新 deployment
+- 盡量用 `clasp run setupScriptProperties` 寫入 Script Properties
+- 呼叫 `initBackend` 建立 runtime sheet 表頭與 seed 資料
+- 驗證 `health` / `getCard` / `initBackend`
+- 更新前端、文件、測試
+
+## 哪些步驟仍需你本人做 Google 授權
+
+- 安裝並登入 `clasp`
+- 第一次 Google OAuth 授權
+- 必要時啟用 Apps Script API / Execution API
+- 第一次建立 Google Sheet
+- 第一次確認 Apps Script Web App 權限
+
+## 建議執行順序
+
+1. `npm install`
+2. `npm run test`
+3. `npm run build`
+4. `npm run lint`
+5. `npm run gas:login`
+6. 建立 Google Sheet，取得 `SHEET_ID`
+7. `export CARD_RUNTIME_SHEET_ID=...`
+8. `export CARD_RUNTIME_SHEET_NAME=cards_runtime`
+9. `export CARD_ADMIN_WRITE_TOKEN=...`
+10. `npm run gas:setup`
+11. `npm run gas:deploy`
+12. `npm run gas:check -- https://script.google.com/macros/s/DEPLOYMENT_ID/exec`
+13. 把 `VITE_CARD_API_BASE_URL` 寫到正式前端環境後重新部署 Pages
 
 ## Image Strategy
 

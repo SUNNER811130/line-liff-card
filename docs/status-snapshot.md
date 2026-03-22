@@ -9,6 +9,8 @@
 - legacy slug `demo-consultant` 仍 canonicalize 到 `default`
 - 第三顆分享按鈕規則未破壞
 - Apps Script + Google Sheets backend scaffold 已加入 repo
+- `clasp` / deployment / runtime sheet / backend check 自動化腳本已加入 repo
+- Apps Script backend 已支援 `health`、`saveCard`、`initBackend`、`setupScriptProperties`
 
 ## 現在的正式資料來源
 
@@ -28,12 +30,15 @@
   - save remote config
   - write token 手動輸入
   - token 可選擇只存 `sessionStorage`
+  - 顯示 API URL 狀態
+  - 顯示 token 暫存狀態
 
 ## 仍需人工完成
 
 - 建立 Google Sheet
-- 部署 Apps Script Web App
-- 設定 Script Properties
+- 第一次 `clasp login`
+- 第一次 Google OAuth / Apps Script 授權
+- 必要時啟用 Apps Script API / Execution API
 - 把 Web App `/exec` URL 填入正式環境
 
 ## 驗證目標

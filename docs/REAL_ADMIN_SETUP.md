@@ -110,7 +110,7 @@ npm run gas:deploy
 正式環境可設定：
 
 ```bash
-VITE_CARD_API_BASE_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
+VITE_CARD_API_BASE_URL=https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec
 ```
 
 或直接在 `/admin/` 的 `API Base URL` 欄位輸入。
@@ -123,6 +123,8 @@ repo 也提供：
 
 用來印出可貼進 `.env.local` / CI secrets 的內容。
 
+目前 repo 內 `.env.local` / `.env.production` 已都寫成上面這個正式 exec URL。
+
 ## 7. 使用 `/admin/`
 
 ### 載入正式資料
@@ -133,6 +135,7 @@ repo 也提供：
 - 抓 `default` 的正式 JSON
 - 經 `assertCardConfig()` 驗證
 - 載入到目前草稿與預覽
+- 若 backend 失敗，`/admin/` 會直接顯示錯誤，不會偷偷把 bundled 當成正式資料
 
 ### 儲存正式資料
 
@@ -142,6 +145,7 @@ repo 也提供：
 - 需要 `write token`
 - 會把目前草稿整份 `CardConfig` 送去 `saveCard`
 - 成功後正式卡頁與後續分享 Flex 會改用新內容
+- 若 backend 仍無法存取 runtime sheet，save 會直接失敗，前台也仍只會 fallback bundled config
 
 `/admin/` 現在也會顯示：
 
@@ -174,6 +178,12 @@ repo 也提供：
 - 畫面上的新文字會跟 Flex 內文一致
 - 新 hero image URL 會一起反映到分享出去的 Flex
 - 後續新分享出去的 Flex 會自動跟著最新 runtime config
+
+這表示只要 remote backend 真的通了：
+
+- `CardPage` 會使用 runtime config
+- `shareDigitalCard()` / `buildFlexMessage()` 也會使用同一份 runtime config
+- `/admin/` save 後重新載入時，理論上應可看到正式資料變更
 
 ## 10. 完整執行順序
 
@@ -221,39 +231,38 @@ npm run gas:deploy
 
 repo 現在已提供 scaffold、前端 adapter、CLI 與文件，但不會假裝已自動替你完成 Google 端授權或已成功部署。
 
-## 12. 2026-03-22 最終排錯狀態
+## 12. 2026-03-22 正式狀態
 
 - 正式 standalone GAS `scriptId`
   - `1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
-- 正式 Web App deployment
-  - `AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA`
-  - 已 redeploy 到 version 8
+- 正式 Web App exec URL
+  - `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
 - 正式 runtime sheet
   - `SHEET_ID=1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
   - `SHEET_NAME=cards_runtime`
+- shell env 目前也已對齊同一組正式資料：
+  - `CARD_RUNTIME_SHEET_ID=1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+  - `CARD_RUNTIME_SHEET_NAME=cards_runtime`
+  - `CARD_ADMIN_WRITE_TOKEN` 已存在
 - manifest 最小必要 scopes
   - `https://www.googleapis.com/auth/spreadsheets`
   - `https://www.googleapis.com/auth/drive.readonly`
-- `debugOpenSheet()` 已存在於正式 GAS，用途是驗證：
-  - sheet id 原值、trim 後、清理 zero-width 後是否一致
-  - `DriveApp.getFileById(cleanId)` 是否可讀到正式檔案
-  - `SpreadsheetApp.openById(cleanId)` 是否可開到正式 Spreadsheet
-  - `getSheetByName(sheetName)` 是否可找到 `cards_runtime`
-- 如果 CLI 執行 `clasp run debugOpenSheet` 出現：
-  - `Unable to run script function. Please make sure you have permission to run the script function.`
-  - 代表真正剩下的是 Google 端授權/執行權限，而不是 repo 端未 push
+- user 已在正確正式 GAS 內手動完成 `debugOpenSheet()` 授權，且已手動更新 Web App deployment
+- 但 2026-03-22 重新驗證 live backend，結果仍是：
+  - `GET /exec?action=health`
+    - `ok: false`
+    - `sheetAccessible: false`
+    - `error: Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+  - `GET /exec?action=getCard&slug=default`
+    - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+  - `POST initBackend`
+    - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 
-此時唯一正確的人工步驟：
+因此這份文件的結論是：
 
-1. 到目前 `.clasp.json` 綁定的正式 Apps Script editor
-2. 選擇並執行 `debugOpenSheet()`
-3. 在 Google 權限畫面同意 Spreadsheet 與 Drive 存取
-4. 確認理想結果為：
-   - `driveFileName = LIFF Card Runtime`
-   - `spreadsheetName = LIFF Card Runtime`
-   - `sheetExists = true`
-5. 完成後再重新執行：
-   - `npm run gas:deploy`
-   - `./scripts/check-runtime-backend.sh https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
-
-在這個人工授權完成前，`health` / `initBackend` / `getCard(default)`、`/admin/` 真實 save/load、前台 remote config 與分享 Flex 的 live 驗證都會持續被同一個 Sheet access error 卡住。
+- 不要再建立新的 GAS 專案
+- 不要切到 Sheet bound script
+- 目前唯一正式後端仍是 `.clasp.json` 綁定的這支 standalone GAS
+- 目前唯一正式資料來源目標仍是 `LIFF Card Runtime / cards_runtime`
+- repo 端的前台、`/admin/`、share/Flex wiring 已完成
+- 但在 `health` 轉綠之前，`/admin/` 真實 load/save、front page remote config、與新分享出去的 Flex live 驗證都還不能算打通

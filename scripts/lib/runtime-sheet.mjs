@@ -12,7 +12,7 @@ export const createRuntimeRow = ({
   slug = DEFAULT_RUNTIME_SLUG,
   config = getDefaultSeedConfig(),
   updatedAt = new Date().toISOString(),
-  updatedBy = 'init-runtime-sheet',
+  updatedBy = 'runtime-sheet',
 } = {}) => [slug, JSON.stringify(config), updatedAt, updatedBy];
 
 const normalizeCell = (value) => String(value ?? '').trim();
@@ -24,7 +24,7 @@ export const initializeRuntimeSheetMatrix = ({
   matrix = [],
   seedConfig = getDefaultSeedConfig(),
   slug = DEFAULT_RUNTIME_SLUG,
-  updatedBy = 'init-runtime-sheet',
+  updatedBy = 'runtime-sheet',
   force = false,
   seedDefault = true,
   now = new Date().toISOString(),

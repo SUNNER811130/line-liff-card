@@ -153,8 +153,8 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByText('正式電子名片後台')).toBeInTheDocument();
-      expect(screen.getByText('卡片主資訊')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('關係護理室')).toBeInTheDocument();
+      expect(screen.getByText('先解鎖，再進入正式內容管理台')).toBeInTheDocument();
+      expect(screen.getByLabelText('管理員解鎖密碼')).toBeInTheDocument();
     });
   });
 

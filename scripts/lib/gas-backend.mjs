@@ -1,24 +1,6 @@
 export const CARD_API_ACTIONS = {
   health: 'health',
-  initBackend: 'initBackend',
   getCard: 'getCard',
-  saveCard: 'saveCard',
-  debugRuntimeAccess: 'debugRuntimeAccess',
-};
-
-export const buildExecUrl = (deploymentId) => `https://script.google.com/macros/s/${deploymentId}/exec`;
-
-export const maskToken = (value) => {
-  const trimmed = String(value ?? '').trim();
-  if (!trimmed) {
-    return '(empty)';
-  }
-
-  if (trimmed.length <= 8) {
-    return `${trimmed.slice(0, 2)}***${trimmed.slice(-1)}`;
-  }
-
-  return `${trimmed.slice(0, 4)}***${trimmed.slice(-4)}`;
 };
 
 export const buildHealthUrl = (baseUrl) => {
@@ -33,56 +15,6 @@ export const buildGetCardUrl = (baseUrl, slug = 'default') => {
   url.searchParams.set('slug', slug);
   return url.toString();
 };
-
-export const buildDebugRuntimeAccessUrl = (baseUrl) => {
-  const url = new URL(baseUrl);
-  url.searchParams.set('action', CARD_API_ACTIONS.debugRuntimeAccess);
-  return url.toString();
-};
-
-export const buildInitBackendPayload = ({
-  writeToken,
-  sheetId,
-  sheetName,
-  updatedBy = '',
-  config,
-  slug = 'default',
-  force = false,
-  seedDefault = true,
-} = {}) => ({
-  action: CARD_API_ACTIONS.initBackend,
-  writeToken,
-  sheetId,
-  sheetName,
-  updatedBy,
-  config,
-  slug,
-  force,
-  seedDefault,
-});
-
-export const extractDeploymentId = (text) => {
-  const match = String(text ?? '').match(/AKfycb[\w-]+/g);
-  return match ? match.at(-1) ?? '' : '';
-};
-
-export const extractVersionNumber = (text) => {
-  const match = String(text ?? '').match(/Created version (\d+)/);
-  return match?.[1] ?? '';
-};
-
-export const buildSaveCardPayload = ({
-  writeToken,
-  updatedBy = '',
-  config,
-  slug = config?.slug ?? 'default',
-} = {}) => ({
-  action: CARD_API_ACTIONS.saveCard,
-  writeToken,
-  updatedBy,
-  config,
-  slug,
-});
 
 export const parseBackendJson = async (response) => {
   const text = await response.text();
@@ -102,7 +34,7 @@ export const assertWriteToken = (expectedToken, candidateToken) => {
   const candidate = String(candidateToken ?? '').trim();
 
   if (!expected) {
-    throw new Error('CARD_ADMIN_WRITE_TOKEN is not configured.');
+    throw new Error('ADMIN_WRITE_SECRET is not configured.');
   }
 
   if (!candidate || candidate !== expected) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { buildDebugRuntimeAccessUrl, buildGetCardUrl, buildHealthUrl, parseBackendJson } from './lib/gas-backend.mjs';
+import { buildGetCardUrl, buildHealthUrl, parseBackendJson } from './lib/gas-backend.mjs';
 
 const [, , baseUrl, slug = 'default'] = process.argv;
 
@@ -17,15 +17,6 @@ if (!healthResponse.ok || healthJson.ok === false || healthJson.sheetAccessible 
 }
 
 console.log(JSON.stringify({ action: 'health', result: healthJson }, null, 2));
-
-const debugResponse = await fetch(buildDebugRuntimeAccessUrl(baseUrl));
-const debugJson = await parseBackendJson(debugResponse);
-if (!debugResponse.ok || debugJson.ok === false || debugJson.sheetAccessible !== true) {
-  console.error(debugJson.error || `debugRuntimeAccess failed with HTTP ${debugResponse.status}.`);
-  process.exit(1);
-}
-
-console.log(JSON.stringify({ action: 'debugRuntimeAccess', result: debugJson }, null, 2));
 
 const cardResponse = await fetch(buildGetCardUrl(baseUrl, slug));
 const cardJson = await parseBackendJson(cardResponse);

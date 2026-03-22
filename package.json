@@ -8,10 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "smoke:pages": "bash ./scripts/smoke-pages.sh",
-    "gas:setup": "bash ./scripts/setup-gas.sh",
-    "gas:login": "clasp login",
-    "gas:push": "clasp push",
-    "gas:deploy": "bash ./scripts/deploy-gas.sh",
+    "gas:setup": "node ./scripts/print-bound-gas-setup.mjs",
+    "gas:deploy": "node ./scripts/print-bound-gas-setup.mjs --deploy",
     "gas:check": "bash ./scripts/check-runtime-backend.sh",
     "test": "vitest run",
     "lint": "eslint ."

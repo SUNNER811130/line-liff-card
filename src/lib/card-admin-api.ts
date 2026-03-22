@@ -14,21 +14,15 @@ export type CardApiSuccessEnvelope = {
   valid?: boolean;
   expiresAt?: string;
   adminSession?: string;
-  cloudName?: string;
-  apiKey?: string;
-  folder?: string;
-  signature?: string;
-  publicId?: string;
-  uploadUrl?: string;
-  timestamp?: number;
+  fileId?: string;
+  publicUrl?: string;
+  viewUrl?: string;
+  downloadUrl?: string;
+  mimeType?: string;
   source?: string;
   config?: unknown;
   card?: unknown;
   data?: CardApiDataEnvelope;
-  initialized?: boolean;
-  seededDefault?: boolean;
-  replacedExisting?: boolean;
-  scriptPropertiesUpdated?: boolean;
   status?: Record<string, unknown>;
 };
 
@@ -45,19 +39,8 @@ export type SaveCardRequest = {
   action: 'saveCard';
   slug: string;
   config: CardConfig;
-  writeToken?: string;
-  adminSession?: string;
+  adminSession: string;
   updatedBy?: string;
-};
-
-export type InitBackendRequest = {
-  action: 'initBackend';
-  writeToken: string;
-  updatedBy?: string;
-  config?: CardConfig;
-  slug?: string;
-  force?: boolean;
-  seedDefault?: boolean;
 };
 
 export type CreateAdminSessionRequest = {
@@ -70,12 +53,14 @@ export type VerifyAdminSessionRequest = {
   adminSession: string;
 };
 
-export type SignUploadRequest = {
-  action: 'signUpload';
+export type UploadImageRequest = {
+  action: 'uploadImage';
   adminSession: string;
   slug: string;
   field: string;
-  fileName?: string;
+  fileName: string;
+  mimeType: string;
+  base64Data: string;
 };
 
 export const buildCardApiUrl = (baseUrl: string, params: Record<string, string>): string => {

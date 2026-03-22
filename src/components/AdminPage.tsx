@@ -14,9 +14,10 @@ import {
   fetchRemoteCardConfig,
   getCardApiBaseUrl,
   saveRemoteCardConfig,
-  signCloudinaryUpload,
+  uploadRuntimeImage,
   verifyAdminSession,
 } from '../lib/card-source';
+import { prepareImageUpload } from '../lib/image-upload';
 import { applyBasicSeo } from '../lib/seo';
 import { isAllowedLink, isHttpUrl, isRelativeAssetPath, validateCardConfig } from '../lib/card-validation';
 
@@ -25,7 +26,6 @@ const adminDescription = '管理正式 runtime config、圖片資產、分享文
 const ADMIN_SESSION_STORAGE_KEY = 'line-liff-card.admin-session';
 const ADMIN_SESSION_EXPIRES_AT_STORAGE_KEY = 'line-liff-card.admin-session-expires-at';
 const ADMIN_UPDATED_BY_STORAGE_KEY = 'line-liff-card.admin-updated-by';
-const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
 
 type StatusTone = 'success' | 'error' | 'info';
 type AssetFieldKey = 'photo' | 'ogImage';
@@ -82,11 +82,12 @@ const fieldDescriptionByLabel: Record<string, string> = {
   第二按鈕文案: '顯示在前台第二顆按鈕與 Flex footer 第二顆按鈕。',
   第二按鈕連結: '點擊前台第二顆按鈕與 Flex footer 第二顆按鈕時前往。',
   'Updated By': '會回寫到 runtime config，方便追蹤最後修改者。',
-  'API Base URL': 'production 會自動吃 env 內正式 exec URL，平常不需手填。',
 };
 
 const formatSaveMessage = (updatedAt?: string, updatedBy?: string): string => {
-  const detail = [updatedAt ? `更新時間：${updatedAt}` : '', updatedBy ? `更新者：${updatedBy}` : ''].filter(Boolean).join('｜');
+  const detail = [updatedAt ? `更新時間：${updatedAt}` : '', updatedBy ? `更新者：${updatedBy}` : '']
+    .filter(Boolean)
+    .join('｜');
   return detail ? `正式名片已儲存。${detail}` : '正式名片已儲存。';
 };
 
@@ -100,7 +101,9 @@ const normalizeAction = (action: CardActionConfig, fallbackId: string): CardActi
 
 const coerceDraft = (draft: CardConfig): CardConfig => ({
   ...draft,
-  actions: draft.actions.slice(0, 2).map((action, index) => normalizeAction(action, index === 0 ? 'contact' : 'services')),
+  actions: draft.actions.slice(0, 2).map((action, index) =>
+    normalizeAction(action, index === 0 ? 'contact' : 'services'),
+  ),
   share: {
     ...draft.share,
     buttonLabel: draft.share.buttonLabel?.trim() || '分享此電子名片給 LINE 好友',
@@ -184,15 +187,24 @@ function AdminTextField({
   );
 }
 
-function StatusBanner({ status }: { status: StatusMessage | null }) {
+function StatusBanner({ status }: { status: StatusMessage | AssetUploadState | null }) {
   if (!status) {
     return null;
   }
 
-  return <p className={`feedback-message ${status.tone === 'error' ? 'is-error' : status.tone === 'success' ? 'is-success' : ''}`}>{status.text}</p>;
+  return (
+    <p
+      className={`feedback-message ${
+        status.tone === 'error' ? 'is-error' : status.tone === 'success' ? 'is-success' : ''
+      }`}
+    >
+      {status.text}
+    </p>
+  );
 }
 
 export function AdminPage() {
+  const apiBaseUrl = getCardApiBaseUrl();
   const initialDraft = createDefaultCardDraft();
   const photoUploadInputRef = useRef<HTMLInputElement | null>(null);
   const ogUploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -202,7 +214,6 @@ export function AdminPage() {
   const [draft, setDraft] = useState<CardConfig>(() => initialDraft);
   const [baselineConfig, setBaselineConfig] = useState<CardConfig>(() => initialDraft);
   const [draftRestoreState, setDraftRestoreState] = useState<DraftRestoreState>(null);
-  const [apiBaseUrl, setApiBaseUrl] = useState(() => getCardApiBaseUrl());
   const [unlockSecret, setUnlockSecret] = useState('');
   const [adminSession, setAdminSession] = useState('');
   const [sessionExpiresAt, setSessionExpiresAt] = useState('');
@@ -210,16 +221,18 @@ export function AdminPage() {
   const [importText, setImportText] = useState('');
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
-  const [localDraftNote, setLocalDraftNote] = useState<string>('本地草稿會自動保留在這個瀏覽器；只有按「儲存正式名片」才會更新正式 runtime config。');
+  const [localDraftNote, setLocalDraftNote] = useState(
+    '本地草稿會自動保留在這個瀏覽器；只有按「儲存正式名片」才會更新正式 runtime config。',
+  );
   const [remoteStatus, setRemoteStatus] = useState<StatusMessage | null>(
-    getCardApiBaseUrl()
+    apiBaseUrl
       ? {
           tone: 'info',
-          text: 'production 已自動帶入正式 exec URL。解鎖後即可直接載入與儲存正式名片。',
+          text: '正式 exec URL 已從 runtime config 帶入。解鎖後即可直接載入、儲存與上傳圖片。',
         }
       : {
-          tone: 'info',
-          text: '目前沒有讀到正式 exec URL；請在進階設定提供 API Base URL。',
+          tone: 'error',
+          text: '目前沒有設定正式 exec URL。請先在前端環境設定 `VITE_CARD_API_BASE_URL`。',
         },
   );
   const [unlockStatus, setUnlockStatus] = useState<StatusMessage | null>({
@@ -241,7 +254,9 @@ export function AdminPage() {
   const photoLinkError = getLinkFieldError(draft.photo.link ?? '', '照片點擊連結');
   const firstActionLinkError = getLinkFieldError(draft.actions[0]?.url ?? '', '第一按鈕連結');
   const secondActionLinkError = getLinkFieldError(draft.actions[1]?.url ?? '', '第二按鈕連結');
-  const latestSaveLabel = [lastSavedAt ? `最近成功儲存：${lastSavedAt}` : '', lastSavedBy ? `儲存者：${lastSavedBy}` : ''].filter(Boolean).join('｜');
+  const latestSaveLabel = [lastSavedAt ? `最近成功儲存：${lastSavedAt}` : '', lastSavedBy ? `儲存者：${lastSavedBy}` : '']
+    .filter(Boolean)
+    .join('｜');
 
   useEffect(() => {
     applyBasicSeo(adminTitle, adminDescription);
@@ -270,7 +285,7 @@ export function AdminPage() {
       key: draftStorageKey,
       config: normalizeLoadedDraft(parsed.data),
     });
-    setLocalDraftNote('偵測到未送出的本地草稿。你可以套用、放棄，或先解鎖後再重新載入正式資料。');
+    setLocalDraftNote('偵測到未送出的本地草稿。解鎖後可套用、放棄，或重新載入正式資料。');
   }, [draftStorageKey]);
 
   useEffect(() => {
@@ -301,6 +316,96 @@ export function AdminPage() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [hasUnsavedChanges]);
+
+  const clearAdminSession = () => {
+    setAdminSession('');
+    setSessionExpiresAt('');
+    window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
+    window.sessionStorage.removeItem(ADMIN_SESSION_EXPIRES_AT_STORAGE_KEY);
+  };
+
+  const handleProtectedActionError = (error: unknown, fallbackMessage: string) => {
+    const message = error instanceof Error ? error.message : fallbackMessage;
+    if (/admin session|session|解鎖/i.test(message)) {
+      clearAdminSession();
+      setUnlockStatus({
+        tone: 'error',
+        text: '管理員 session 已失效，請重新解鎖後再試。',
+      });
+    }
+
+    return message;
+  };
+
+  const applyOfficialConfig = (config: CardConfig, note: string) => {
+    const normalized = normalizeLoadedDraft(config);
+    setDraft(normalized);
+    setBaselineConfig(cloneCardConfig(normalized));
+    setDraftRestoreState(null);
+    setLocalDraftNote(note);
+  };
+
+  const patchDraft = (updater: (current: CardConfig) => CardConfig) => {
+    setDraft((current) => coerceDraft(updater(current)));
+  };
+
+  const updateAction = (index: number, updater: (action: CardActionConfig) => CardActionConfig) => {
+    patchDraft((current) => {
+      const actions = [...current.actions];
+      actions[index] = updater(
+        actions[index] ?? normalizeAction({ id: index === 0 ? 'contact' : 'services', label: '' }, index === 0 ? 'contact' : 'services'),
+      );
+      return {
+        ...current,
+        actions,
+      };
+    });
+  };
+
+  async function loadRemoteIntoDraft(skipDirtyConfirm = false, sessionToken = adminSession) {
+    if (!apiBaseUrl.trim()) {
+      setRemoteStatus({
+        tone: 'error',
+        text: '目前沒有正式 exec URL，請先設定 `VITE_CARD_API_BASE_URL`。',
+      });
+      return;
+    }
+
+    if (!sessionToken.trim()) {
+      setRemoteStatus({
+        tone: 'error',
+        text: '請先完成管理員解鎖，再載入正式資料。',
+      });
+      return;
+    }
+
+    if (!skipDirtyConfirm && hasUnsavedChanges && !window.confirm('目前有尚未儲存的變更，重新載入正式資料會覆蓋本地草稿。要繼續嗎？')) {
+      return;
+    }
+
+    setRemoteStatus({
+      tone: 'info',
+      text: '正在載入正式 runtime config...',
+    });
+
+    try {
+      const remoteConfig = await fetchRemoteCardConfig(draft.slug, {
+        baseUrl: apiBaseUrl,
+      });
+      applyOfficialConfig(remoteConfig, '已載入正式 runtime config。接下來的修改仍只存在本地草稿，直到你按下儲存。');
+      setLastSavedAt(undefined);
+      setLastSavedBy(undefined);
+      setRemoteStatus({
+        tone: 'success',
+        text: `已載入 slug「${remoteConfig.slug}」的正式資料。`,
+      });
+    } catch (error) {
+      setRemoteStatus({
+        tone: 'error',
+        text: handleProtectedActionError(error, '載入正式資料失敗。'),
+      });
+    }
+  }
 
   useEffect(() => {
     if (hasRestoredSessionRef.current || !apiBaseUrl.trim()) {
@@ -343,105 +448,16 @@ export function AdminPage() {
           text: error instanceof Error ? error.message : '恢復管理員解鎖失敗，請重新解鎖。',
         });
       });
-  // Session restore only needs to react to route-local storage state and env URL changes.
+  // Session restore only needs to react to env URL and initial local draft state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseUrl, draftRestoreState, draftStorageKey]);
-
-  const patchDraft = (updater: (current: CardConfig) => CardConfig) => {
-    setDraft((current) => coerceDraft(updater(current)));
-  };
-
-  const updateAction = (index: number, updater: (action: CardActionConfig) => CardActionConfig) => {
-    patchDraft((current) => {
-      const actions = [...current.actions];
-      actions[index] = updater(actions[index] ?? normalizeAction({ id: index === 0 ? 'contact' : 'services', label: '' }, index === 0 ? 'contact' : 'services'));
-      return {
-        ...current,
-        actions,
-      };
-    });
-  };
-
-  const clearAdminSession = () => {
-    setAdminSession('');
-    setSessionExpiresAt('');
-    window.sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-    window.sessionStorage.removeItem(ADMIN_SESSION_EXPIRES_AT_STORAGE_KEY);
-  };
-
-  const handleProtectedActionError = (error: unknown, fallbackMessage: string) => {
-    const message = error instanceof Error ? error.message : fallbackMessage;
-    if (/admin session|session|解鎖/i.test(message)) {
-      clearAdminSession();
-      setUnlockStatus({
-        tone: 'error',
-        text: '管理員 session 已失效，請重新解鎖後再試。',
-      });
-    }
-
-    return message;
-  };
-
-  const applyOfficialConfig = (config: CardConfig, note: string) => {
-    const normalized = normalizeLoadedDraft(config);
-    setDraft(normalized);
-    setBaselineConfig(cloneCardConfig(normalized));
-    setDraftRestoreState(null);
-    setLocalDraftNote(note);
-  };
-
-  async function loadRemoteIntoDraft(skipDirtyConfirm = false, sessionToken = adminSession) {
-    if (!apiBaseUrl.trim()) {
-      setRemoteStatus({
-        tone: 'error',
-        text: '目前沒有正式 API Base URL，請先打開進階設定確認 exec URL。',
-      });
-      return;
-    }
-
-    if (!sessionToken.trim()) {
-      setRemoteStatus({
-        tone: 'error',
-        text: '請先完成管理員解鎖，再載入正式資料。',
-      });
-      return;
-    }
-
-    if (!skipDirtyConfirm && hasUnsavedChanges && !window.confirm('目前有尚未儲存的變更，重新載入正式資料會覆蓋本地草稿。要繼續嗎？')) {
-      return;
-    }
-
-    setRemoteStatus({
-      tone: 'info',
-      text: '正在載入正式 runtime config...',
-    });
-
-    try {
-      const remoteConfig = await fetchRemoteCardConfig(draft.slug, {
-        baseUrl: apiBaseUrl,
-      });
-      applyOfficialConfig(remoteConfig, '已載入正式 runtime config。接下來的修改仍只存在本地草稿，直到你按下儲存。');
-      setLastSavedAt(undefined);
-      setLastSavedBy(undefined);
-      setRemoteStatus({
-        tone: 'success',
-        text: `已載入 slug「${remoteConfig.slug}」的正式資料。`,
-      });
-    } catch (error) {
-      setRemoteStatus({
-        tone: 'error',
-        text: handleProtectedActionError(error, '載入正式資料失敗。'),
-      });
-    }
-  }
+  }, [apiBaseUrl, draftRestoreState]);
 
   const handleUnlock = async () => {
     if (!apiBaseUrl.trim()) {
       setUnlockStatus({
         tone: 'error',
-        text: '目前沒有正式 API Base URL，請先在進階設定確認 exec URL。',
+        text: '目前沒有正式 exec URL。請先在前端環境設定 `VITE_CARD_API_BASE_URL`。',
       });
-      setAdvancedSettingsOpen(true);
       return;
     }
 
@@ -477,7 +493,7 @@ export function AdminPage() {
     clearAdminSession();
     setUnlockStatus({
       tone: 'info',
-      text: '已清除本次解鎖。若要儲存或上傳圖片，請重新解鎖。',
+      text: '已清除本次解鎖。關閉分頁後也會自動失效。',
     });
   };
 
@@ -629,41 +645,23 @@ export function AdminPage() {
       return;
     }
 
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      setAssetUploadStatus({
-        activeField: field,
-        tone: 'error',
-        text: '圖片檔案過大，請改用 10MB 以下的圖片。',
-      });
-      return;
-    }
-
     setAssetUploadStatus({
       activeField: field,
       tone: 'info',
-      text: '正在取得上傳簽章並上傳圖片...',
+      text: '正在壓縮圖片並上傳到 Google Drive...',
     });
 
     try {
-      const signature = await signCloudinaryUpload(draft.slug, field, adminSession, {
+      const prepared = await prepareImageUpload(file);
+      const uploaded = await uploadRuntimeImage({
+        slug: draft.slug,
+        field,
+        adminSession,
+        fileName: prepared.fileName,
+        mimeType: prepared.mimeType,
+        base64Data: prepared.base64Data,
         baseUrl: apiBaseUrl,
-        fileName: file.name,
       });
-      const formData = new FormData();
-      formData.set('file', file);
-      formData.set('api_key', signature.apiKey);
-      formData.set('timestamp', String(signature.timestamp));
-      formData.set('signature', signature.signature);
-      formData.set('folder', signature.folder);
-      formData.set('public_id', signature.publicId);
-      const uploadResponse = await fetch(signature.uploadUrl, {
-        method: 'POST',
-        body: formData,
-      });
-      const payload = (await uploadResponse.json()) as { secure_url?: string; error?: { message?: string } };
-      if (!uploadResponse.ok || !payload.secure_url) {
-        throw new Error(payload.error?.message || 'Cloudinary 沒有回傳 secure_url。');
-      }
 
       patchDraft((current) =>
         field === 'photo'
@@ -671,7 +669,7 @@ export function AdminPage() {
               ...current,
               photo: {
                 ...current.photo,
-                src: payload.secure_url ?? current.photo.src,
+                src: uploaded.publicUrl,
                 alt: current.photo.alt || file.name,
               },
             }
@@ -679,14 +677,14 @@ export function AdminPage() {
               ...current,
               seo: {
                 ...current.seo,
-                ogImage: payload.secure_url ?? current.seo.ogImage,
+                ogImage: uploaded.publicUrl,
               },
             },
       );
       setAssetUploadStatus({
         activeField: field,
         tone: 'success',
-        text: `圖片已上傳成功，已寫入 ${field === 'photo' ? '正式圖片 URL' : 'OG Image URL'} 草稿欄位。`,
+        text: `圖片已上傳到 Google Drive，已寫入 ${field === 'photo' ? '正式圖片 URL' : 'OG Image URL'} 草稿欄位。`,
       });
     } catch (error) {
       setAssetUploadStatus({
@@ -703,15 +701,19 @@ export function AdminPage() {
         <div>
           <p className="eyebrow">Admin Console</p>
           <h1 className="admin-title">正式電子名片後台</h1>
-          <p className="admin-copy">這裡是正式 runtime config 管理台。解鎖後即可直接編輯文字、按鈕、分享文案與圖片資產，儲存後會同步影響前台卡片與 LINE 分享 Flex。</p>
+          <p className="admin-copy">
+            這裡是正式 runtime config 管理台。解鎖後即可直接編輯文字、按鈕、分享文案與圖片資產，儲存後會同步影響前台卡片與 LINE 分享 Flex。
+          </p>
         </div>
         <div className="admin-note-card">
           <p className="section-label">營運狀態</p>
-          <p className={`support-copy ${hasUnsavedChanges ? 'admin-dirty-copy' : ''}`}>{hasUnsavedChanges ? '尚未儲存變更。重新整理或離開頁面前會提醒。' : '目前沒有未儲存變更。'}</p>
+          <p className={`support-copy ${hasUnsavedChanges ? 'admin-dirty-copy' : ''}`}>
+            {hasUnsavedChanges ? '尚未儲存變更。重新整理或離開頁面前會提醒。' : '目前沒有未儲存變更。'}
+          </p>
           <p className="support-copy">{localDraftNote}</p>
-          <p className="support-copy">{`草稿儲存鍵：${draftStorageKey}`}</p>
-          {latestSaveLabel ? <p className="support-copy">{latestSaveLabel}</p> : null}
+          <p className="support-copy">{latestSaveLabel || '本分頁尚未完成正式儲存。'}</p>
           <p className="support-copy">{isUnlocked ? formatSessionLabel(sessionExpiresAt) : '尚未解鎖。'}</p>
+          <p className="support-copy">{apiBaseUrl ? `正式 exec URL 已設定。` : '正式 exec URL 尚未設定。'}</p>
         </div>
       </section>
 
@@ -726,7 +728,7 @@ export function AdminPage() {
             value={unlockSecret}
             onChange={setUnlockSecret}
             type="password"
-            placeholder="輸入 ADMIN_WRITE_SECRET 或相容 write token"
+            placeholder="輸入 ADMIN_WRITE_SECRET"
             hint="前端不保存真正 secret；送出後只保留短期 admin session 到 sessionStorage。"
           />
           <div className="admin-inline-actions">
@@ -741,258 +743,276 @@ export function AdminPage() {
         <StatusBanner status={unlockStatus} />
       </section>
 
-      {draftRestoreState ? (
-        <section className="admin-panel admin-restore-banner">
+      {!isUnlocked ? (
+        <section className="admin-panel admin-panel-spacious">
           <div className="admin-section-heading">
-            <p className="section-label">本地草稿提示</p>
-            <h2 className="admin-panel-title">偵測到未送出的瀏覽器草稿</h2>
+            <p className="section-label">待解鎖</p>
+            <h2 className="admin-panel-title">先解鎖，再進入正式內容管理台</h2>
           </div>
-          <p className="support-copy">這份草稿尚未覆蓋正式資料。你可以先套用檢查，或丟棄後重新載入正式 runtime config。</p>
-          <div className="admin-inline-actions">
-            <button type="button" className="action-button action-button-secondary" onClick={handleApplyStoredDraft}>
-              套用本地草稿
-            </button>
-            <button type="button" className="action-button action-button-primary" onClick={() => void handleDiscardStoredDraft()}>
-              放棄草稿並重新載入
-            </button>
-          </div>
+          <p className="support-copy">
+            `/admin/` 現在只作為正式後台使用，不再提供手動 exec URL、舊 backend、或 Cloudinary 工程設定入口。
+          </p>
+          {draftRestoreState ? (
+            <p className="support-copy">本瀏覽器有未送出的本地草稿；解鎖後可選擇套用或放棄。</p>
+          ) : null}
+          <StatusBanner status={remoteStatus} />
         </section>
       ) : null}
 
-      <section className="admin-layout">
-        <div className="admin-form-column">
-          <section className="admin-panel">
-            <div className="admin-section-heading">
-              <p className="section-label">基本資料</p>
-              <h2 className="admin-panel-title">卡片主資訊</h2>
-            </div>
-            <div className="admin-field-grid">
-              <AdminTextField label="姓名" value={draft.content.fullName} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, fullName: value } }))} placeholder="例如 蘇彥宇 Sunner" hint={fieldDescriptionByLabel.姓名} />
-              <AdminTextField label="職稱" value={draft.content.title} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, title: value } }))} placeholder="例如 品牌顧問 / Creative Strategist" hint={fieldDescriptionByLabel.職稱} />
-              <AdminTextField label="品牌名稱" value={draft.content.brandName} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, brandName: value } }))} placeholder="例如 SUNNER Studio" hint={fieldDescriptionByLabel.品牌名稱} />
-              <AdminTextField label="分享區標題" value={draft.content.sharePanelTitle} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, sharePanelTitle: value } }))} placeholder="例如 分享這張名片" hint={fieldDescriptionByLabel.分享區標題} />
-            </div>
-          </section>
-
-          <section className="admin-panel">
-            <div className="admin-section-heading">
-              <p className="section-label">品牌文案</p>
-              <h2 className="admin-panel-title">前台與 Flex 主要文案</h2>
-            </div>
-            <div className="admin-field-grid">
-              <AdminTextField label="主標" value={draft.content.headline} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, headline: value } }))} textareaRows={2} hint={fieldDescriptionByLabel.主標} full />
-              <AdminTextField label="副標" value={draft.content.subheadline} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, subheadline: value } }))} textareaRows={2} hint={fieldDescriptionByLabel.副標} full />
-              <AdminTextField label="介紹文字" value={draft.content.intro} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, intro: value } }))} textareaRows={5} hint={fieldDescriptionByLabel.介紹文字} full />
-              <AdminTextField label="行動區標題" value={draft.content.actionsTitle} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, actionsTitle: value } }))} hint={fieldDescriptionByLabel.行動區標題} />
-              <AdminTextField label="行動區說明" value={draft.content.actionsDescription} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, actionsDescription: value } }))} textareaRows={3} hint={fieldDescriptionByLabel.行動區說明} />
-            </div>
-          </section>
-
-          <section className="admin-panel">
-            <div className="admin-section-heading">
-              <p className="section-label">圖片資產</p>
-              <h2 className="admin-panel-title">正式圖片與分享圖</h2>
-            </div>
-            <div className="admin-field-grid">
-              <AdminTextField
-                label="正式圖片 URL"
-                value={draft.photo.src}
-                onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, src: value } }))}
-                hint={fieldDescriptionByLabel['正式圖片 URL']}
-                error={photoFieldError}
-                full
-                trailing={
-                  <div className="admin-inline-actions admin-inline-actions-3">
-                    <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('photo')}>
-                      上傳頭像 / 主視覺
-                    </button>
-                    <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.photo.src)} onClick={() => openExternalUrl(draft.photo.src)}>
-                      開新分頁測試
-                    </button>
-                  </div>
-                }
-              />
-              <AdminTextField label="照片替代文字" value={draft.photo.alt} onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, alt: value } }))} hint={fieldDescriptionByLabel.照片替代文字} />
-              <AdminTextField label="照片點擊連結" value={draft.photo.link ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, link: value } }))} hint={fieldDescriptionByLabel.照片點擊連結} error={photoLinkError} />
-              <AdminTextField
-                label="OG Image URL"
-                value={draft.seo.ogImage}
-                onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogImage: value } }))}
-                hint={fieldDescriptionByLabel['OG Image URL']}
-                error={ogImageFieldError}
-                full
-                trailing={
-                  <div className="admin-inline-actions admin-inline-actions-3">
-                    <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('ogImage')}>
-                      上傳分享圖
-                    </button>
-                    <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.seo.ogImage)} onClick={() => openExternalUrl(draft.seo.ogImage)}>
-                      開新分頁測試
-                    </button>
-                  </div>
-                }
-              />
-            </div>
-            <input ref={photoUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('photo', event)} />
-            <input ref={ogUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('ogImage', event)} />
-            <div className="admin-image-preview-grid">
-              <div className="admin-image-preview-card">
-                <p className="section-label">主視覺預覽</p>
-                {isImagePreviewable(draft.photo.src) ? <img src={draft.photo.src} alt={draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的正式圖片 URL。</p>}
+      {isUnlocked ? (
+        <>
+          {draftRestoreState ? (
+            <section className="admin-panel admin-restore-banner">
+              <div className="admin-section-heading">
+                <p className="section-label">本地草稿提示</p>
+                <h2 className="admin-panel-title">偵測到未送出的瀏覽器草稿</h2>
               </div>
-              <div className="admin-image-preview-card">
-                <p className="section-label">分享圖預覽</p>
-                {isImagePreviewable(draft.seo.ogImage) ? <img src={draft.seo.ogImage} alt={draft.seo.ogTitle || draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的 OG Image URL。</p>}
+              <p className="support-copy">這份草稿尚未覆蓋正式資料。你可以先套用檢查，或丟棄後重新載入正式 runtime config。</p>
+              <div className="admin-inline-actions">
+                <button type="button" className="action-button action-button-secondary" onClick={handleApplyStoredDraft}>
+                  套用本地草稿
+                </button>
+                <button type="button" className="action-button action-button-primary" onClick={() => void handleDiscardStoredDraft()}>
+                  放棄草稿並重新載入
+                </button>
               </div>
-            </div>
-            <StatusBanner status={assetUploadStatus} />
-          </section>
+            </section>
+          ) : null}
 
-          <section className="admin-panel">
-            <div className="admin-section-heading">
-              <p className="section-label">按鈕設定</p>
-              <h2 className="admin-panel-title">前台 CTA 與 Flex footer</h2>
-            </div>
-            <div className="admin-field-grid">
-              <AdminTextField label="第一按鈕文案" value={draft.actions[0]?.label ?? ''} onChange={(value) => updateAction(0, (action) => ({ ...action, label: value }))} hint={fieldDescriptionByLabel.第一按鈕文案} />
-              <AdminTextField
-                label="第一按鈕連結"
-                value={draft.actions[0]?.url ?? ''}
-                onChange={(value) => updateAction(0, (action) => ({ ...action, url: value }))}
-                hint={fieldDescriptionByLabel.第一按鈕連結}
-                error={firstActionLinkError}
-                trailing={
-                  <div className="admin-inline-actions">
-                    <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[0]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[0]?.url ?? '')}>
-                      測試第一按鈕
-                    </button>
-                  </div>
-                }
-              />
-              <AdminTextField label="第二按鈕文案" value={draft.actions[1]?.label ?? ''} onChange={(value) => updateAction(1, (action) => ({ ...action, label: value }))} hint={fieldDescriptionByLabel.第二按鈕文案} />
-              <AdminTextField
-                label="第二按鈕連結"
-                value={draft.actions[1]?.url ?? ''}
-                onChange={(value) => updateAction(1, (action) => ({ ...action, url: value }))}
-                hint={fieldDescriptionByLabel.第二按鈕連結}
-                error={secondActionLinkError}
-                trailing={
-                  <div className="admin-inline-actions">
-                    <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[1]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[1]?.url ?? '')}>
-                      測試第二按鈕
-                    </button>
-                  </div>
-                }
-              />
-            </div>
-          </section>
-
-          <section className="admin-panel">
-            <div className="admin-section-heading">
-              <p className="section-label">分享設定</p>
-              <h2 className="admin-panel-title">Web Share fallback 與 SEO</h2>
-            </div>
-            <div className="admin-field-grid">
-              <AdminTextField label="分享標題" value={draft.share.title ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, title: value } }))} hint={fieldDescriptionByLabel.分享標題} />
-              <AdminTextField label="分享按鈕文案" value={draft.share.buttonLabel ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, buttonLabel: value } }))} hint={fieldDescriptionByLabel.分享按鈕文案} />
-              <AdminTextField label="分享文字" value={draft.share.text ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, text: value } }))} textareaRows={4} hint={fieldDescriptionByLabel.分享文字} full />
-              <AdminTextField label="SEO Title" value={draft.seo.title} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, title: value } }))} hint="顯示在瀏覽器 title 與搜尋結果標題。" />
-              <AdminTextField label="SEO Description" value={draft.seo.description} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, description: value } }))} textareaRows={3} hint="顯示在搜尋結果描述與社群分享描述。" />
-              <AdminTextField label="OG Title" value={draft.seo.ogTitle} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogTitle: value } }))} hint="社群分享卡片標題。" />
-              <AdminTextField label="OG Description" value={draft.seo.ogDescription} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogDescription: value } }))} textareaRows={3} hint="社群分享卡片描述。" />
-            </div>
-          </section>
-
-          <section className="admin-panel">
-            <div className="admin-section-heading">
-              <p className="section-label">系統資訊</p>
-              <h2 className="admin-panel-title">儲存、重載與解鎖狀態</h2>
-            </div>
-            <div className="admin-field-grid">
-              <AdminTextField label="Updated By" value={updatedBy} onChange={setUpdatedBy} placeholder="例如 admin@sunner.tw" hint={fieldDescriptionByLabel['Updated By']} />
-              <AdminTextField label="更新時間" value={lastSavedAt ?? ''} onChange={() => undefined} hint="最後一次成功儲存後會顯示 updatedAt。" readOnly />
-              <div className="admin-info-card">
-                <p className="section-label">解鎖狀態</p>
-                <p className="support-copy">{isUnlocked ? '目前已解鎖，可儲存與上傳圖片。' : '尚未解鎖，儲存與圖片上傳會被擋下。'}</p>
-                <p className="support-copy">{sessionExpiresAt ? `Session 到期：${sessionExpiresAt}` : '本分頁沒有有效 session。'}</p>
-              </div>
-              <div className="admin-info-card">
-                <p className="section-label">最後寫入</p>
-                <p className="support-copy">{latestSaveLabel || '尚未在本分頁成功儲存。'}</p>
-                <p className="support-copy">{`正式 slug：${draft.slug}`}</p>
-              </div>
-            </div>
-            <div className="admin-inline-actions admin-inline-actions-3">
-              <button type="button" className="action-button action-button-secondary" onClick={() => void loadRemoteIntoDraft()}>
-                載入正式資料
-              </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => void loadRemoteIntoDraft()}>
-                重新載入正式資料
-              </button>
-              <button type="button" className="action-button action-button-secondary" onClick={handleReset}>
-                重設成本地預設
-              </button>
-              <button type="button" className="action-button action-button-primary" onClick={() => void handleSaveRemote()}>
-                儲存正式名片
-              </button>
-            </div>
-            <StatusBanner status={remoteStatus} />
-          </section>
-
-          <section className="admin-panel">
-            <details open={advancedSettingsOpen} onToggle={(event) => setAdvancedSettingsOpen((event.target as HTMLDetailsElement).open)}>
-              <summary className="admin-details-summary">工程設定與 JSON 工具</summary>
-              <div className="admin-details-body">
+          <section className="admin-layout">
+            <div className="admin-form-column">
+              <section className="admin-panel">
+                <div className="admin-section-heading">
+                  <p className="section-label">基本資料</p>
+                  <h2 className="admin-panel-title">卡片主資訊</h2>
+                </div>
                 <div className="admin-field-grid">
-                  <AdminTextField label="API Base URL" value={apiBaseUrl} onChange={setApiBaseUrl} placeholder="https://script.google.com/macros/s/DEPLOYMENT_ID/exec" hint={fieldDescriptionByLabel['API Base URL']} full />
+                  <AdminTextField label="姓名" value={draft.content.fullName} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, fullName: value } }))} placeholder="例如 蘇彥宇 Sunner" hint={fieldDescriptionByLabel.姓名} />
+                  <AdminTextField label="職稱" value={draft.content.title} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, title: value } }))} placeholder="例如 品牌顧問 / Creative Strategist" hint={fieldDescriptionByLabel.職稱} />
+                  <AdminTextField label="品牌名稱" value={draft.content.brandName} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, brandName: value } }))} placeholder="例如 SUNNER Studio" hint={fieldDescriptionByLabel.品牌名稱} />
+                  <AdminTextField label="分享區標題" value={draft.content.sharePanelTitle} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, sharePanelTitle: value } }))} placeholder="例如 分享這張名片" hint={fieldDescriptionByLabel.分享區標題} />
+                </div>
+              </section>
+
+              <section className="admin-panel">
+                <div className="admin-section-heading">
+                  <p className="section-label">品牌文案</p>
+                  <h2 className="admin-panel-title">前台與 Flex 主要文案</h2>
+                </div>
+                <div className="admin-field-grid">
+                  <AdminTextField label="主標" value={draft.content.headline} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, headline: value } }))} textareaRows={2} hint={fieldDescriptionByLabel.主標} full />
+                  <AdminTextField label="副標" value={draft.content.subheadline} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, subheadline: value } }))} textareaRows={2} hint={fieldDescriptionByLabel.副標} full />
+                  <AdminTextField label="介紹文字" value={draft.content.intro} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, intro: value } }))} textareaRows={5} hint={fieldDescriptionByLabel.介紹文字} full />
+                  <AdminTextField label="行動區標題" value={draft.content.actionsTitle} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, actionsTitle: value } }))} hint={fieldDescriptionByLabel.行動區標題} />
+                  <AdminTextField label="行動區說明" value={draft.content.actionsDescription} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, actionsDescription: value } }))} textareaRows={3} hint={fieldDescriptionByLabel.行動區說明} />
+                </div>
+              </section>
+
+              <section className="admin-panel">
+                <div className="admin-section-heading">
+                  <p className="section-label">圖片資產</p>
+                  <h2 className="admin-panel-title">Google Drive 上傳與正式圖片</h2>
+                </div>
+                <div className="admin-field-grid">
+                  <AdminTextField
+                    label="正式圖片 URL"
+                    value={draft.photo.src}
+                    onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, src: value } }))}
+                    hint={fieldDescriptionByLabel['正式圖片 URL']}
+                    error={photoFieldError}
+                    full
+                    trailing={
+                      <div className="admin-inline-actions admin-inline-actions-3">
+                        <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('photo')}>
+                          上傳頭像 / 主視覺
+                        </button>
+                        <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.photo.src)} onClick={() => openExternalUrl(draft.photo.src)}>
+                          開新分頁測試
+                        </button>
+                      </div>
+                    }
+                  />
+                  <AdminTextField label="照片替代文字" value={draft.photo.alt} onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, alt: value } }))} hint={fieldDescriptionByLabel.照片替代文字} />
+                  <AdminTextField label="照片點擊連結" value={draft.photo.link ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, link: value } }))} hint={fieldDescriptionByLabel.照片點擊連結} error={photoLinkError} />
+                  <AdminTextField
+                    label="OG Image URL"
+                    value={draft.seo.ogImage}
+                    onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogImage: value } }))}
+                    hint={fieldDescriptionByLabel['OG Image URL']}
+                    error={ogImageFieldError}
+                    full
+                    trailing={
+                      <div className="admin-inline-actions admin-inline-actions-3">
+                        <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('ogImage')}>
+                          上傳分享圖
+                        </button>
+                        <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.seo.ogImage)} onClick={() => openExternalUrl(draft.seo.ogImage)}>
+                          開新分頁測試
+                        </button>
+                      </div>
+                    }
+                  />
+                </div>
+                <input ref={photoUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('photo', event)} />
+                <input ref={ogUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('ogImage', event)} />
+                <div className="admin-image-preview-grid">
+                  <div className="admin-image-preview-card">
+                    <p className="section-label">主視覺預覽</p>
+                    {isImagePreviewable(draft.photo.src) ? <img src={draft.photo.src} alt={draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的正式圖片 URL。</p>}
+                  </div>
+                  <div className="admin-image-preview-card">
+                    <p className="section-label">分享圖預覽</p>
+                    {isImagePreviewable(draft.seo.ogImage) ? <img src={draft.seo.ogImage} alt={draft.seo.ogTitle || draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的 OG Image URL。</p>}
+                  </div>
+                </div>
+                <StatusBanner status={assetUploadStatus} />
+              </section>
+
+              <section className="admin-panel">
+                <div className="admin-section-heading">
+                  <p className="section-label">按鈕設定</p>
+                  <h2 className="admin-panel-title">前台 CTA 與 Flex footer</h2>
+                </div>
+                <div className="admin-field-grid">
+                  <AdminTextField label="第一按鈕文案" value={draft.actions[0]?.label ?? ''} onChange={(value) => updateAction(0, (action) => ({ ...action, label: value }))} hint={fieldDescriptionByLabel.第一按鈕文案} />
+                  <AdminTextField
+                    label="第一按鈕連結"
+                    value={draft.actions[0]?.url ?? ''}
+                    onChange={(value) => updateAction(0, (action) => ({ ...action, url: value }))}
+                    hint={fieldDescriptionByLabel.第一按鈕連結}
+                    error={firstActionLinkError}
+                    trailing={
+                      <div className="admin-inline-actions">
+                        <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[0]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[0]?.url ?? '')}>
+                          測試第一按鈕
+                        </button>
+                      </div>
+                    }
+                  />
+                  <AdminTextField label="第二按鈕文案" value={draft.actions[1]?.label ?? ''} onChange={(value) => updateAction(1, (action) => ({ ...action, label: value }))} hint={fieldDescriptionByLabel.第二按鈕文案} />
+                  <AdminTextField
+                    label="第二按鈕連結"
+                    value={draft.actions[1]?.url ?? ''}
+                    onChange={(value) => updateAction(1, (action) => ({ ...action, url: value }))}
+                    hint={fieldDescriptionByLabel.第二按鈕連結}
+                    error={secondActionLinkError}
+                    trailing={
+                      <div className="admin-inline-actions">
+                        <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[1]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[1]?.url ?? '')}>
+                          測試第二按鈕
+                        </button>
+                      </div>
+                    }
+                  />
+                </div>
+              </section>
+
+              <section className="admin-panel">
+                <div className="admin-section-heading">
+                  <p className="section-label">分享設定</p>
+                  <h2 className="admin-panel-title">Web Share fallback 與 SEO</h2>
+                </div>
+                <div className="admin-field-grid">
+                  <AdminTextField label="分享標題" value={draft.share.title ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, title: value } }))} hint={fieldDescriptionByLabel.分享標題} />
+                  <AdminTextField label="分享按鈕文案" value={draft.share.buttonLabel ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, buttonLabel: value } }))} hint={fieldDescriptionByLabel.分享按鈕文案} />
+                  <AdminTextField label="分享文字" value={draft.share.text ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, text: value } }))} textareaRows={4} hint={fieldDescriptionByLabel.分享文字} full />
+                  <AdminTextField label="SEO Title" value={draft.seo.title} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, title: value } }))} hint="顯示在瀏覽器 title 與搜尋結果標題。" />
+                  <AdminTextField label="SEO Description" value={draft.seo.description} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, description: value } }))} textareaRows={3} hint="顯示在搜尋結果描述與社群分享描述。" />
+                  <AdminTextField label="OG Title" value={draft.seo.ogTitle} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogTitle: value } }))} hint="社群分享卡片標題。" />
+                  <AdminTextField label="OG Description" value={draft.seo.ogDescription} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogDescription: value } }))} textareaRows={3} hint="社群分享卡片描述。" />
+                </div>
+              </section>
+
+              <section className="admin-panel">
+                <div className="admin-section-heading">
+                  <p className="section-label">系統資訊</p>
+                  <h2 className="admin-panel-title">儲存、重載與 session 狀態</h2>
+                </div>
+                <div className="admin-field-grid">
+                  <AdminTextField label="Updated By" value={updatedBy} onChange={setUpdatedBy} placeholder="例如 admin@sunner.tw" hint={fieldDescriptionByLabel['Updated By']} />
+                  <AdminTextField label="更新時間" value={lastSavedAt ?? ''} onChange={() => undefined} hint="最後一次成功儲存後會顯示 updatedAt。" readOnly />
+                  <div className="admin-info-card">
+                    <p className="section-label">解鎖狀態</p>
+                    <p className="support-copy">{isUnlocked ? '目前已解鎖，可儲存與上傳圖片。' : '尚未解鎖，儲存與圖片上傳會被擋下。'}</p>
+                    <p className="support-copy">{sessionExpiresAt ? `Session 到期：${sessionExpiresAt}` : '本分頁沒有有效 session。'}</p>
+                  </div>
+                  <div className="admin-info-card">
+                    <p className="section-label">最後寫入</p>
+                    <p className="support-copy">{latestSaveLabel || '尚未在本分頁成功儲存。'}</p>
+                    <p className="support-copy">{`正式 slug：${draft.slug}`}</p>
+                  </div>
                 </div>
                 <div className="admin-inline-actions admin-inline-actions-3">
-                  <button type="button" className="action-button action-button-secondary" onClick={handleExport}>
-                    複製 JSON 草稿
+                  <button type="button" className="action-button action-button-secondary" onClick={() => void loadRemoteIntoDraft()}>
+                    重新載入正式資料
                   </button>
-                  <button type="button" className="action-button action-button-secondary" onClick={handleImport}>
-                    套用 JSON 草稿
+                  <button type="button" className="action-button action-button-secondary" onClick={handleReset}>
+                    重設成本地預設
                   </button>
-                  <label className="action-button action-button-secondary admin-file-button">
-                    匯入 JSON 檔
-                    <input type="file" accept="application/json" className="admin-hidden-input" onChange={(event) => void handleImportFile(event)} />
-                  </label>
+                  <button type="button" className="action-button action-button-primary" onClick={() => void handleSaveRemote()}>
+                    儲存正式名片
+                  </button>
                 </div>
-                {importFeedback ? <p className="feedback-message">{importFeedback}</p> : null}
-                {exportFeedback ? <p className="feedback-message">{exportFeedback}</p> : null}
-                <AdminTextField
-                  label="JSON 草稿"
-                  value={importText}
-                  onChange={setImportText}
-                  textareaRows={10}
-                  hint="方便比對與手動貼上 runtime config。"
-                  full
-                />
-              </div>
-            </details>
-          </section>
-        </div>
+                <StatusBanner status={remoteStatus} />
+              </section>
 
-        <aside className="admin-preview-column">
-          <section className="admin-panel admin-panel-sticky">
-            <div className="admin-section-heading">
-              <p className="section-label">正式預覽</p>
-              <h2 className="admin-panel-title">目前草稿渲染結果</h2>
+              <section className="admin-panel">
+                <div className="admin-section-heading">
+                  <p className="section-label">進階設定</p>
+                  <h2 className="admin-panel-title">草稿工具與 JSON 匯入匯出</h2>
+                </div>
+                <details open={advancedSettingsOpen} onToggle={(event) => setAdvancedSettingsOpen((event.target as HTMLDetailsElement).open)}>
+                  <summary className="admin-details-summary">展開草稿工具</summary>
+                  <div className="admin-details-body">
+                    <div className="admin-inline-actions admin-inline-actions-3">
+                      <button type="button" className="action-button action-button-secondary" onClick={handleExport}>
+                        複製 JSON 草稿
+                      </button>
+                      <button type="button" className="action-button action-button-secondary" onClick={handleImport}>
+                        套用 JSON 草稿
+                      </button>
+                      <label className="action-button action-button-secondary admin-file-button">
+                        匯入 JSON 檔
+                        <input type="file" accept="application/json" className="admin-hidden-input" onChange={(event) => void handleImportFile(event)} />
+                      </label>
+                    </div>
+                    {importFeedback ? <p className="feedback-message">{importFeedback}</p> : null}
+                    {exportFeedback ? <p className="feedback-message">{exportFeedback}</p> : null}
+                    <AdminTextField
+                      label="JSON 草稿"
+                      value={importText}
+                      onChange={setImportText}
+                      textareaRows={10}
+                      hint="方便比對與手動貼上 runtime config。"
+                      full
+                    />
+                  </div>
+                </details>
+              </section>
             </div>
-            {validationErrors.length > 0 ? (
-              <div className="admin-validation">
-                <p className="support-copy">以下欄位仍需修正，否則不能儲存正式名片：</p>
-                <ul className="admin-validation-list">
-                  {validationErrors.map((error) => (
-                    <li key={error}>{error}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            <CardPage config={draft} previewMode embedded />
+
+            <aside className="admin-preview-column">
+              <section className="admin-panel admin-panel-sticky">
+                <div className="admin-section-heading">
+                  <p className="section-label">正式預覽</p>
+                  <h2 className="admin-panel-title">目前草稿渲染結果</h2>
+                </div>
+                {validationErrors.length > 0 ? (
+                  <div className="admin-validation">
+                    <p className="support-copy">以下欄位仍需修正，否則不能儲存正式名片：</p>
+                    <ul className="admin-validation-list">
+                      {validationErrors.map((error) => (
+                        <li key={error}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <CardPage config={draft} previewMode embedded />
+              </section>
+            </aside>
           </section>
-        </aside>
-      </section>
+        </>
+      ) : null}
     </main>
   );
 }

@@ -8,7 +8,7 @@ import {
   getCardApiErrorMessage,
   readCardApiJsonResponse,
   type SaveCardRequest,
-  type SignUploadRequest,
+  type UploadImageRequest,
   type VerifyAdminSessionRequest,
 } from './card-admin-api';
 import { getCanonicalCardSlug } from './routes';
@@ -38,14 +38,12 @@ export type VerifyAdminSessionResult = {
   expiresAt?: string;
 };
 
-export type UploadSignatureResult = {
-  cloudName: string;
-  apiKey: string;
-  folder: string;
-  timestamp: number;
-  signature: string;
-  publicId: string;
-  uploadUrl: string;
+export type UploadedImageResult = {
+  fileId: string;
+  publicUrl: string;
+  viewUrl?: string;
+  downloadUrl?: string;
+  mimeType?: string;
 };
 
 const DEFAULT_FETCH: FetchLike = (...args) => fetch(...args);
@@ -79,7 +77,7 @@ export async function fetchRemoteCardConfig(
   const expectedSlug = getCanonicalCardSlug(slug || defaultCardSlug);
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
   if (!baseUrl) {
-    throw new Error('未設定正式後台 API Base URL。');
+    throw new Error('未設定正式後台 exec URL。');
   }
 
   const response = await (options.fetchImpl ?? DEFAULT_FETCH)(buildCardApiUrl(baseUrl, { action: 'getCard', slug: expectedSlug }), {
@@ -135,8 +133,7 @@ export async function saveRemoteCardConfig(
   config: CardConfig,
   options: {
     baseUrl?: string;
-    writeToken?: string;
-    adminSession?: string;
+    adminSession: string;
     updatedBy?: string;
     fetchImpl?: FetchLike;
   },
@@ -144,12 +141,11 @@ export async function saveRemoteCardConfig(
   const expectedSlug = getCanonicalCardSlug(slug || config.slug || defaultCardSlug);
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
   if (!baseUrl) {
-    throw new Error('未設定正式後台 API Base URL。');
+    throw new Error('未設定正式後台 exec URL。');
   }
 
-  const writeToken = options.writeToken?.trim() ?? '';
   const adminSession = options.adminSession?.trim() ?? '';
-  if (!writeToken && !adminSession) {
+  if (!adminSession) {
     throw new Error('請先完成管理員解鎖。');
   }
 
@@ -159,7 +155,7 @@ export async function saveRemoteCardConfig(
     slug: expectedSlug,
     config: validatedConfig,
     updatedBy: options.updatedBy?.trim() ?? '',
-    ...(adminSession ? { adminSession } : { writeToken }),
+    adminSession,
   };
   const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
     method: 'POST',
@@ -192,7 +188,7 @@ export async function createAdminSession(
 ): Promise<AdminSessionResult> {
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
   if (!baseUrl) {
-    throw new Error('未設定正式後台 API Base URL。');
+    throw new Error('未設定正式後台 exec URL。');
   }
 
   const trimmedSecret = secret.trim();
@@ -240,7 +236,7 @@ export async function verifyAdminSession(
 ): Promise<VerifyAdminSessionResult> {
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
   if (!baseUrl) {
-    throw new Error('未設定正式後台 API Base URL。');
+    throw new Error('未設定正式後台 exec URL。');
   }
 
   const trimmedSession = adminSession.trim();
@@ -271,32 +267,36 @@ export async function verifyAdminSession(
   };
 }
 
-export async function signCloudinaryUpload(
-  slug: string,
-  field: string,
-  adminSession: string,
+export async function uploadRuntimeImage(
   options: {
+    slug: string;
+    field: string;
+    adminSession: string;
+    fileName: string;
+    mimeType: string;
+    base64Data: string;
     baseUrl?: string;
-    fileName?: string;
     fetchImpl?: FetchLike;
-  } = {},
-): Promise<UploadSignatureResult> {
+  },
+): Promise<UploadedImageResult> {
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
   if (!baseUrl) {
-    throw new Error('未設定正式後台 API Base URL。');
+    throw new Error('未設定正式後台 exec URL。');
   }
 
-  const trimmedSession = adminSession.trim();
+  const trimmedSession = options.adminSession.trim();
   if (!trimmedSession) {
     throw new Error('請先完成管理員解鎖。');
   }
 
-  const requestBody: SignUploadRequest = {
-    action: 'signUpload',
+  const requestBody: UploadImageRequest = {
+    action: 'uploadImage',
     adminSession: trimmedSession,
-    slug: getCanonicalCardSlug(slug || defaultCardSlug),
-    field: field.trim(),
-    fileName: options.fileName?.trim() ?? '',
+    slug: getCanonicalCardSlug(options.slug || defaultCardSlug),
+    field: options.field.trim(),
+    fileName: options.fileName.trim(),
+    mimeType: options.mimeType.trim(),
+    base64Data: options.base64Data.trim(),
   };
   const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
     method: 'POST',
@@ -308,38 +308,30 @@ export async function signCloudinaryUpload(
   const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {
-    throw new Error(getCardApiErrorMessage(payload, `取得圖片上傳簽章失敗（${response.status}）。`));
+    throw new Error(getCardApiErrorMessage(payload, `圖片上傳失敗（${response.status}）。`));
   }
 
-  const requiredKeys = ['cloudName', 'apiKey', 'folder', 'signature', 'publicId', 'uploadUrl'] as const;
+  const requiredKeys = ['fileId', 'publicUrl'] as const;
   const payloadRecord = payload as Record<string, unknown>;
   for (const key of requiredKeys) {
     if (!(key in payloadRecord) || typeof payloadRecord[key] !== 'string' || !payloadRecord[key]) {
-      throw new Error(`後台缺少圖片上傳欄位：${key}。`);
+      throw new Error(`後台缺少圖片回應欄位：${key}。`);
     }
   }
 
-  if (!('timestamp' in payload) || typeof payload.timestamp !== 'number') {
-    throw new Error('後台缺少圖片上傳 timestamp。');
-  }
-
   const successPayload = payload as {
-    cloudName: string;
-    apiKey: string;
-    folder: string;
-    timestamp: number;
-    signature: string;
-    publicId: string;
-    uploadUrl: string;
+    fileId: string;
+    publicUrl: string;
+    viewUrl?: string;
+    downloadUrl?: string;
+    mimeType?: string;
   };
 
   return {
-    cloudName: successPayload.cloudName,
-    apiKey: successPayload.apiKey,
-    folder: successPayload.folder,
-    timestamp: successPayload.timestamp,
-    signature: successPayload.signature,
-    publicId: successPayload.publicId,
-    uploadUrl: successPayload.uploadUrl,
+    fileId: successPayload.fileId,
+    publicUrl: successPayload.publicUrl,
+    viewUrl: successPayload.viewUrl,
+    downloadUrl: successPayload.downloadUrl,
+    mimeType: successPayload.mimeType,
   };
 }

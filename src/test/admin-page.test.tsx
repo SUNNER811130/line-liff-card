@@ -5,6 +5,15 @@ import { AdminPage } from '../components/AdminPage';
 import { cloneCardConfig, getAdminDraftStorageKey } from '../content/cards/draft';
 import { defaultCard } from '../content/cards/default';
 
+vi.mock('../lib/image-upload', () => ({
+  prepareImageUpload: vi.fn(async (file: File) => ({
+    fileName: file.name,
+    mimeType: file.type || 'image/png',
+    base64Data: 'cHJlcGFyZWQ=',
+    previewUrl: 'data:image/png;base64,cHJlcGFyZWQ=',
+  })),
+}));
+
 const createJsonResponse = (payload: unknown, init?: ResponseInit) =>
   new Response(JSON.stringify(payload), {
     status: 200,
@@ -17,12 +26,6 @@ const createJsonResponse = (payload: unknown, init?: ResponseInit) =>
 const buildFetchMock = (remoteConfig?: typeof defaultCard) =>
   vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-
-    if (url.startsWith('https://api.cloudinary.com/')) {
-      return createJsonResponse({
-        secure_url: 'https://res.cloudinary.com/demo/image/upload/v1/runtime-hero.jpg',
-      });
-    }
 
     if (init?.method === 'POST') {
       const payload = JSON.parse(String(init.body || '{}')) as { action?: string; config?: unknown };
@@ -43,16 +46,13 @@ const buildFetchMock = (remoteConfig?: typeof defaultCard) =>
         });
       }
 
-      if (payload.action === 'signUpload') {
+      if (payload.action === 'uploadImage') {
         return createJsonResponse({
           ok: true,
-          cloudName: 'demo',
-          apiKey: 'cloudinary-key',
-          folder: 'line-liff-card',
-          timestamp: 1711111111,
-          signature: 'signed-value',
-          publicId: 'line-liff-card/default/photo-1711111111-runtime-hero',
-          uploadUrl: 'https://api.cloudinary.com/v1_1/demo/image/upload',
+          fileId: 'drive-file-123',
+          publicUrl: 'https://drive.google.com/uc?export=view&id=drive-file-123',
+          viewUrl: 'https://drive.google.com/file/d/drive-file-123/view',
+          downloadUrl: 'https://drive.google.com/uc?export=download&id=drive-file-123',
         });
       }
 
@@ -145,16 +145,14 @@ describe('AdminPage', () => {
     });
   });
 
-  it('blocks save when admin session is missing', async () => {
+  it('keeps the CMS locked until an admin session exists', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     vi.stubGlobal('fetch', buildFetchMock());
 
     render(<AdminPage />);
 
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: '儲存正式名片' }));
-
-    expect(screen.getByText('請先完成管理員解鎖，才能儲存正式名片。')).toBeInTheDocument();
+    expect(screen.getByText('先解鎖，再進入正式內容管理台')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '儲存正式名片' })).not.toBeInTheDocument();
   });
 
   it('restores an existing session from sessionStorage and auto-loads remote data', async () => {
@@ -187,7 +185,9 @@ describe('AdminPage', () => {
 
     render(<AdminPage />);
 
-    expect(screen.getByText('偵測到未送出的瀏覽器草稿')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('偵測到未送出的瀏覽器草稿')).toBeInTheDocument();
+    });
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: '套用本地草稿' }));
@@ -196,6 +196,9 @@ describe('AdminPage', () => {
     cleanup();
     vi.stubGlobal('fetch', buildFetchMock(remoteConfig));
     render(<AdminPage />);
+    await waitFor(() => {
+      expect(screen.getByText('偵測到未送出的瀏覽器草稿')).toBeInTheDocument();
+    });
     await user.click(screen.getByRole('button', { name: '放棄草稿並重新載入' }));
 
     await waitFor(() => {
@@ -225,7 +228,70 @@ describe('AdminPage', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('uploads an image via signed Cloudinary flow and writes secure_url back to the form', async () => {
+  it('clears the current admin session from sessionStorage', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    window.sessionStorage.setItem('line-liff-card.admin-session', 'restored-session');
+    window.sessionStorage.setItem('line-liff-card.admin-session-expires-at', '2026-03-22T15:00:00.000Z');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    render(<AdminPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/已恢復管理員解鎖/)).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '清除本次解鎖' }));
+
+    expect(window.sessionStorage.getItem('line-liff-card.admin-session')).toBeNull();
+    expect(screen.getByText('已清除本次解鎖。關閉分頁後也會自動失效。')).toBeInTheDocument();
+  });
+
+  it('surfaces save failures from the backend', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === 'POST') {
+        const payload = JSON.parse(String(init.body || '{}')) as { action?: string };
+        if (payload.action === 'createAdminSession') {
+          return createJsonResponse({
+            ok: true,
+            adminSession: 'session-123',
+            expiresAt: '2026-03-22T12:00:00.000Z',
+          });
+        }
+
+        if (payload.action === 'saveCard') {
+          return createJsonResponse({ ok: false, error: '後台儲存失敗。' }, { status: 500 });
+        }
+      }
+
+      if (url.includes('action=getCard')) {
+        return createJsonResponse({ ok: true, slug: 'default', config: defaultCard });
+      }
+
+      return createJsonResponse({ ok: false, error: 'Unhandled request' }, { status: 500 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText('Updated By'), 'admin@test');
+    await user.click(screen.getByRole('button', { name: '儲存正式名片' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('後台儲存失敗。')).toBeInTheDocument();
+    });
+  });
+
+  it('uploads an image via the GAS Drive flow and writes the public url back to the form', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     vi.stubGlobal('fetch', buildFetchMock());
 
@@ -245,8 +311,8 @@ describe('AdminPage', () => {
     fireEvent.change(imageInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('https://res.cloudinary.com/demo/image/upload/v1/runtime-hero.jpg')).toBeInTheDocument();
-      expect(screen.getByText(/圖片已上傳成功/)).toBeInTheDocument();
+      expect(screen.getByDisplayValue('https://drive.google.com/uc?export=view&id=drive-file-123')).toBeInTheDocument();
+      expect(screen.getByText(/圖片已上傳到 Google Drive/)).toBeInTheDocument();
     });
   });
 });

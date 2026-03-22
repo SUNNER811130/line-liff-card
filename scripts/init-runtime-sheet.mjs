@@ -18,6 +18,8 @@ const hasFlag = (flag) => args.includes(flag);
 
 const baseUrl = readFlag('--base-url') || process.env.VITE_CARD_API_BASE_URL || '';
 const writeToken = readFlag('--write-token') || process.env.CARD_ADMIN_WRITE_TOKEN || '';
+const sheetId = readFlag('--sheet-id') || process.env.CARD_RUNTIME_SHEET_ID || '';
+const sheetName = readFlag('--sheet-name') || process.env.CARD_RUNTIME_SHEET_NAME || 'cards_runtime';
 const updatedBy = readFlag('--updated-by') || process.env.CARD_ADMIN_UPDATED_BY || 'init-runtime-sheet.mjs';
 const slug = readFlag('--slug') || 'default';
 const force = hasFlag('--force');
@@ -35,6 +37,8 @@ if (!writeToken.trim()) {
 
 const payload = buildInitBackendPayload({
   writeToken,
+  sheetId,
+  sheetName,
   updatedBy,
   slug,
   force,

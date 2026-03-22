@@ -35,6 +35,8 @@ export const buildGetCardUrl = (baseUrl, slug = 'default') => {
 
 export const buildInitBackendPayload = ({
   writeToken,
+  sheetId,
+  sheetName,
   updatedBy = '',
   config,
   slug = 'default',
@@ -43,6 +45,8 @@ export const buildInitBackendPayload = ({
 } = {}) => ({
   action: CARD_API_ACTIONS.initBackend,
   writeToken,
+  sheetId,
+  sheetName,
   updatedBy,
   config,
   slug,

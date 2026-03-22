@@ -2,7 +2,7 @@
 
 ## 專案一句話
 
-這是單一正式卡 `default` 的 LINE 電子名片站。現在前台與 `/admin/` 都能透過 remote `CardConfig` 運作，repo 內也已補上最大程度自動化的 Google Sheets + Apps Script 部署腳本；但 Google 端授權仍不能假裝自動完成。
+這是單一正式卡 `default` 的 LINE 電子名片站。前台與 `/admin/` 的 runtime 路徑都已接好，Apps Script deployment 也已更新到正式 exec URL；目前唯一阻塞是 Google Sheet ID / 權限未通，導致正式 runtime 資料尚未初始化成功。
 
 ## 先確認的產品規則
 
@@ -76,3 +76,10 @@ scaffold：
   - `setupScriptProperties()`
 
 Google 端部署與授權仍需人工完成，不要描述成 repo 已自動部署成功。
+
+2026-03-22 進度補充：
+
+- 已把 deployment `AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA` 更新到 version 5
+- `clasp push --force` 後新版 bootstrap 邏輯已上線；`initBackend` 不再先卡在 `CARD_ADMIN_WRITE_TOKEN is not configured`
+- 目前最新錯誤是 `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- 下個接手者不要再花時間排查 deployment / bootstrap；先請使用者確認正確的 Google Sheet ID 與 sharing 權限

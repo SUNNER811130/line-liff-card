@@ -26,25 +26,13 @@ if [[ ! -f "${CLASP_FILE}" ]]; then
   exit 1
 fi
 
-if ! clasp login --status >/dev/null 2>&1; then
+if ! clasp list >/dev/null 2>&1; then
   echo "clasp is not logged in. Run: clasp login"
   exit 1
 fi
 
 echo "[deploy-gas] clasp push"
 (cd "${ROOT_DIR}" && clasp push)
-
-if [[ -n "${SHEET_ID}" && -n "${WRITE_TOKEN}" ]]; then
-  echo "[deploy-gas] Setting Script Properties via clasp run setupScriptProperties"
-  PARAMS="$(node -e "console.log(JSON.stringify([{sheetId:process.env.CARD_RUNTIME_SHEET_ID,sheetName:process.env.CARD_RUNTIME_SHEET_NAME || 'cards_runtime',writeToken:process.env.CARD_ADMIN_WRITE_TOKEN}]))")"
-  if ! (cd "${ROOT_DIR}" && clasp run setupScriptProperties --params "${PARAMS}"); then
-    echo "[deploy-gas] Failed to run setupScriptProperties."
-    echo "Apps Script API / Execution API may need manual enablement, or your account may require Google authorization."
-    exit 1
-  fi
-else
-  echo "[deploy-gas] CARD_RUNTIME_SHEET_ID or CARD_ADMIN_WRITE_TOKEN missing. Skipping automatic Script Properties setup."
-fi
 
 echo "[deploy-gas] Creating version"
 VERSION_OUTPUT="$(cd "${ROOT_DIR}" && clasp version "${VERSION_NOTE}")"
@@ -66,7 +54,7 @@ fi
 
 echo "${DEPLOY_OUTPUT}"
 
-FINAL_DEPLOYMENT_ID="$(printf '%s\n' "${DEPLOY_OUTPUT}" | sed -n 's/.*- AKfycb[[:alnum:]_-]*/&/p' | sed 's/.*- //' | tail -n 1)"
+FINAL_DEPLOYMENT_ID="$(printf '%s\n' "${DEPLOY_OUTPUT}" | grep -o 'AKfycb[[:alnum:]_-]*' | tail -n 1)"
 
 if [[ -z "${FINAL_DEPLOYMENT_ID}" ]]; then
   FINAL_DEPLOYMENT_ID="${DEPLOYMENT_ID}"
@@ -87,6 +75,8 @@ if [[ -n "${WRITE_TOKEN}" ]]; then
   node "${ROOT_DIR}/scripts/init-runtime-sheet.mjs" \
     --base-url "${EXEC_URL}" \
     --write-token "${WRITE_TOKEN}" \
+    --sheet-id "${SHEET_ID}" \
+    --sheet-name "${SHEET_NAME}" \
     --updated-by "${UPDATED_BY}" || {
       echo "[deploy-gas] init-runtime-sheet failed. This usually means Google authorization or web app access settings still need manual completion."
       exit 1

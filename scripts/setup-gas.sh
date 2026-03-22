@@ -19,7 +19,7 @@ require_command() {
 require_command clasp
 require_command node
 
-if ! clasp login --status >/dev/null 2>&1; then
+if ! clasp list >/dev/null 2>&1; then
   echo "clasp is not logged in."
   echo "Run: clasp login"
   exit 1

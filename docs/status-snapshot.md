@@ -11,6 +11,8 @@
 - Apps Script + Google Sheets backend scaffold 已加入 repo
 - `clasp` / deployment / runtime sheet / backend check 自動化腳本已加入 repo
 - Apps Script backend 已支援 `health`、`saveCard`、`initBackend`、`setupScriptProperties`
+- Web App deployment `AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA` 已更新到 version 5
+- `.env.local` 與 `.env.production` 已寫入正式 `VITE_CARD_API_BASE_URL`
 
 ## 現在的正式資料來源
 
@@ -33,13 +35,17 @@
   - 顯示 API URL 狀態
   - 顯示 token 暫存狀態
 
-## 仍需人工完成
+## 目前阻塞點
 
-- 建立 Google Sheet
-- 第一次 `clasp login`
-- 第一次 Google OAuth / Apps Script 授權
-- 必要時啟用 Apps Script API / Execution API
-- 把 Web App `/exec` URL 填入正式環境
+- backend `health` 可回應，但 Script Properties 尚未完整初始化
+- `initBackend` 已能進入新版 bootstrap 流程，但 Google 端回 `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- 在確認正確 Google Sheet ID 或該 Sheet 已共享給部署帳號 `sunner811130@gmail.com` 前，無法完成 default seed、`/admin/` 正式 load/save、前台 remote config 驗證
+
+## 仍需人工確認
+
+- 確認 Google Sheet ID 是否正確
+- 確認該 Sheet 是否可由 Apps Script 部署帳號 `sunner811130@gmail.com` 存取
+- 若使用的是另一份 Sheet，補上正確 ID 後重新執行 backend init/check
 
 ## 驗證目標
 

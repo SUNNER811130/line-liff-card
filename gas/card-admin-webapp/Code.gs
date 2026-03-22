@@ -50,7 +50,9 @@ function doPost(e) {
   try {
     var payload = parseRequestBody_(e);
     if (payload.action === ACTION_INIT_BACKEND) {
-      verifyWriteToken_(payload.writeToken);
+      if (!canBootstrapBackend_(payload)) {
+        verifyWriteToken_(payload.writeToken);
+      }
       var initResult = initBackend(payload);
       return jsonResponse_(true, {
         action: ACTION_INIT_BACKEND,
@@ -297,6 +299,14 @@ function getParameter_(e, key) {
 
 function getScriptProperty_(key) {
   return PropertiesService.getScriptProperties().getProperty(key);
+}
+
+function canBootstrapBackend_(payload) {
+  var configuredWriteToken = String(getScriptProperty_('CARD_ADMIN_WRITE_TOKEN') || '').trim();
+  var incomingSheetId = String(payload && payload.sheetId ? payload.sheetId : '').trim();
+  var incomingWriteToken = String(payload && payload.writeToken ? payload.writeToken : '').trim();
+
+  return !configuredWriteToken && !!incomingSheetId && !!incomingWriteToken;
 }
 
 function verifyWriteToken_(candidateToken) {

@@ -88,9 +88,10 @@ describe('AdminPage', () => {
   });
 
   it('shows clear errors when API url or token is missing', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', '');
     render(<AdminPage />);
 
-    const user = userEvent.setup();
+    let user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: '載入正式資料' }));
     expect(screen.getByText('請先輸入正式後台 API Base URL，才能載入正式資料。')).toBeInTheDocument();
 
@@ -98,6 +99,7 @@ describe('AdminPage', () => {
     cleanup();
     render(<AdminPage />);
 
+    user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: '儲存到正式後台' }));
     expect(screen.getByText('請先輸入 write token，才能儲存正式資料。')).toBeInTheDocument();
   });

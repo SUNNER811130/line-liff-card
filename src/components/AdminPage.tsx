@@ -7,7 +7,7 @@ import {
   parseCardConfigJson,
   serializeCardConfig,
 } from '../content/cards/draft';
-import type { CardActionConfig, CardConfig } from '../content/cards/types';
+import type { CardActionConfig, CardActionTone, CardConfig } from '../content/cards/types';
 import { assertCardConfig } from '../content/cards/schema';
 import {
   createAdminSession,
@@ -20,6 +20,14 @@ import {
 import { prepareImageUpload } from '../lib/image-upload';
 import { applyBasicSeo } from '../lib/seo';
 import { isAllowedLink, isHttpUrl, isRelativeAssetPath, validateCardConfig } from '../lib/card-validation';
+import {
+  ADMIN_FIELD_GROUPS,
+  ADMIN_FIELD_GROUPS_BY_KEY,
+  CARD_RUNTIME_FIELDS_BY_GROUP,
+  type AdminFieldGroupKey,
+  type AdminFieldRegistryItem,
+  type FieldVisibilityScope,
+} from '../lib/card-field-registry';
 
 const adminTitle = '正式電子名片後台';
 const adminDescription = '管理正式 runtime config、圖片資產、分享文案與按鈕設定。';
@@ -51,7 +59,8 @@ type FieldProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  hint: string;
+  helpText: string;
+  badgeLabel: string;
   textareaRows?: number;
   type?: 'text' | 'password';
   error?: string | null;
@@ -60,29 +69,24 @@ type FieldProps = {
   trailing?: ReactNode;
 };
 
-const fieldDescriptionByLabel: Record<string, string> = {
-  姓名: '顯示在卡片主視覺、瀏覽器標題與 LINE Flex 名稱。',
-  職稱: '顯示在姓名下方，也會進入 LINE Flex 內文。',
-  品牌名稱: '顯示在卡片頂部與 LINE Flex 品牌列。',
-  主標: '顯示在卡片主視覺文案區，強化第一眼定位。',
-  副標: '顯示在主標下方，用來補充價值主張。',
-  介紹文字: '顯示於前台卡片介紹區與 Flex 內文摘要。',
-  分享區標題: '顯示在前台分享面板標題。',
-  行動區標題: '顯示在按鈕區塊標題。',
-  行動區說明: '顯示在前台按鈕區塊上方說明。',
-  '正式圖片 URL': '卡片主視覺與 LINE Flex hero image 會使用這個欄位。',
-  照片替代文字: '提供無障礙描述，也會作為預覽圖片替代文字。',
-  照片點擊連結: '點擊主視覺圖片後導向的位置。',
-  'OG Image URL': '社群分享預覽圖與部分分享 fallback 預覽使用。',
-  分享標題: 'Web Share 與文字 fallback 分享時優先使用。',
-  分享文字: 'LINE Flex 不可用時的分享文字內容。',
-  分享按鈕文案: '前台第三顆分享按鈕固定使用這個文案。',
-  第一按鈕文案: '顯示在前台第一顆按鈕與 Flex footer 第一顆按鈕。',
-  第一按鈕連結: '點擊前台第一顆按鈕與 Flex footer 第一顆按鈕時前往。',
-  第二按鈕文案: '顯示在前台第二顆按鈕與 Flex footer 第二顆按鈕。',
-  第二按鈕連結: '點擊前台第二顆按鈕與 Flex footer 第二顆按鈕時前往。',
-  'Updated By': '會回寫到 runtime config，方便追蹤最後修改者。',
+const visibilityScopeLabel: Record<FieldVisibilityScope, string> = {
+  both: 'Flex / 網頁',
+  web: '網頁',
+  flex: 'Flex',
+  system: '系統',
 };
+
+const actionToneOptions: CardActionTone[] = ['primary', 'secondary'];
+
+const serializeStringList = (value: string[]): string => value.join('\n');
+
+const parseStringList = (value: string): string[] =>
+  value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const toReadableBoolean = (value: boolean): string => (value ? 'true' : 'false');
 
 const formatSaveMessage = (updatedAt?: string, updatedBy?: string): string => {
   const detail = [updatedAt ? `更新時間：${updatedAt}` : '', updatedBy ? `更新者：${updatedBy}` : '']
@@ -150,7 +154,8 @@ function AdminTextField({
   value,
   onChange,
   placeholder,
-  hint,
+  helpText,
+  badgeLabel,
   textareaRows,
   type = 'text',
   error,
@@ -160,8 +165,10 @@ function AdminTextField({
 }: FieldProps) {
   return (
     <label className={`admin-field ${full ? 'admin-field-full' : ''}`}>
-      <span>{label}</span>
-      <small className="admin-field-description">{hint || fieldDescriptionByLabel[label] || ''}</small>
+      <span>
+        <span>{label}</span>
+        <span className="admin-visibility-badge">{badgeLabel}</span>
+      </span>
       {textareaRows ? (
         <textarea
           aria-label={label}
@@ -183,6 +190,70 @@ function AdminTextField({
       )}
       {trailing}
       {error ? <small className="admin-inline-error">{error}</small> : null}
+      <small className="admin-field-description">{helpText}</small>
+    </label>
+  );
+}
+
+function AdminToggleField({
+  label,
+  checked,
+  onChange,
+  helpText,
+  badgeLabel,
+  disabled = false,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  helpText: string;
+  badgeLabel: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="admin-field admin-toggle-field">
+      <span>
+        <span>{label}</span>
+        <span className="admin-visibility-badge">{badgeLabel}</span>
+      </span>
+      <label className="admin-toggle" aria-label={label}>
+        <input aria-label={label} type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} disabled={disabled} />
+        <span>{checked ? '啟用' : '停用'}</span>
+      </label>
+      <small className="admin-field-description">{helpText}</small>
+    </div>
+  );
+}
+
+function AdminSelectField({
+  label,
+  value,
+  onChange,
+  helpText,
+  badgeLabel,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  helpText: string;
+  badgeLabel: string;
+  options: string[];
+}) {
+  return (
+    <label className="admin-field">
+      <span>
+        <span>{label}</span>
+        <span className="admin-visibility-badge">{badgeLabel}</span>
+      </span>
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      <small className="admin-field-description">{helpText}</small>
     </label>
   );
 }
@@ -360,6 +431,341 @@ export function AdminPage() {
         actions,
       };
     });
+  };
+
+  const updateActionTone = (index: number, tone: string) => {
+    updateAction(index, (action) => ({
+      ...action,
+      tone: tone === 'primary' ? 'primary' : 'secondary',
+    }));
+  };
+
+  const getFieldError = (fieldKey: string): string | null => {
+    switch (fieldKey) {
+      case 'photo.src':
+        return photoFieldError;
+      case 'photo.link':
+        return photoLinkError;
+      case 'seo.ogImage':
+        return ogImageFieldError;
+      case 'actions.0.url':
+        return firstActionLinkError;
+      case 'actions.1.url':
+        return secondActionLinkError;
+      default:
+        return null;
+    }
+  };
+
+  const renderTextField = (
+    field: AdminFieldRegistryItem,
+    value: string,
+    onChange: (value: string) => void,
+    options: {
+      trailing?: ReactNode;
+      readOnly?: boolean;
+      textareaRows?: number;
+    } = {},
+  ) => (
+    <AdminTextField
+      key={field.key}
+      label={field.label}
+      value={value}
+      onChange={onChange}
+      placeholder={field.placeholder}
+      helpText={field.helpText}
+      badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+      textareaRows={options.textareaRows ?? field.textareaRows}
+      error={getFieldError(field.key)}
+      full={field.full}
+      readOnly={options.readOnly ?? !field.isEditable}
+      trailing={options.trailing}
+    />
+  );
+
+  const renderField = (field: AdminFieldRegistryItem): ReactNode => {
+    switch (field.key) {
+      case 'content.fullName':
+        return renderTextField(field, draft.content.fullName, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, fullName: value } })),
+        );
+      case 'content.title':
+        return renderTextField(field, draft.content.title, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, title: value } })),
+        );
+      case 'content.brandName':
+        return renderTextField(field, draft.content.brandName, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, brandName: value } })),
+        );
+      case 'content.headline':
+        return renderTextField(field, draft.content.headline, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, headline: value } })),
+        );
+      case 'content.subheadline':
+        return renderTextField(field, draft.content.subheadline, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, subheadline: value } })),
+        );
+      case 'content.intro':
+        return renderTextField(field, draft.content.intro, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, intro: value } })),
+        );
+      case 'content.highlightsTitle':
+        return renderTextField(field, draft.content.highlightsTitle, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, highlightsTitle: value } })),
+        );
+      case 'content.highlights':
+        return renderTextField(
+          field,
+          serializeStringList(draft.content.highlights),
+          (value) =>
+            patchDraft((current) => ({ ...current, content: { ...current.content, highlights: parseStringList(value) } })),
+          { textareaRows: field.textareaRows },
+        );
+      case 'content.actionsTitle':
+        return renderTextField(field, draft.content.actionsTitle, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, actionsTitle: value } })),
+        );
+      case 'content.actionsDescription':
+        return renderTextField(field, draft.content.actionsDescription, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, actionsDescription: value } })),
+        );
+      case 'content.sharePanelTitle':
+        return renderTextField(field, draft.content.sharePanelTitle, (value) =>
+          patchDraft((current) => ({ ...current, content: { ...current.content, sharePanelTitle: value } })),
+        );
+      case 'modules.showHighlights':
+        return (
+          <AdminToggleField
+            key={field.key}
+            label={field.label}
+            checked={draft.modules.showHighlights}
+            onChange={(checked) => patchDraft((current) => ({ ...current, modules: { ...current.modules, showHighlights: checked } }))}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+          />
+        );
+      case 'modules.showSharePanel':
+        return (
+          <AdminToggleField
+            key={field.key}
+            label={field.label}
+            checked={draft.modules.showSharePanel}
+            onChange={(checked) => patchDraft((current) => ({ ...current, modules: { ...current.modules, showSharePanel: checked } }))}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+          />
+        );
+      case 'modules.showQrCode':
+        return (
+          <AdminToggleField
+            key={field.key}
+            label={field.label}
+            checked={draft.modules.showQrCode}
+            onChange={(checked) => patchDraft((current) => ({ ...current, modules: { ...current.modules, showQrCode: checked } }))}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+          />
+        );
+      case 'photo.src':
+        return renderTextField(
+          field,
+          draft.photo.src,
+          (value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, src: value } })),
+          {
+            trailing: (
+              <div className="admin-inline-actions admin-inline-actions-3">
+                <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('photo')}>
+                  上傳頭像 / 主視覺
+                </button>
+                <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.photo.src)} onClick={() => openExternalUrl(draft.photo.src)}>
+                  開新分頁測試
+                </button>
+              </div>
+            ),
+          },
+        );
+      case 'photo.alt':
+        return renderTextField(field, draft.photo.alt, (value) =>
+          patchDraft((current) => ({ ...current, photo: { ...current.photo, alt: value } })),
+        );
+      case 'photo.link':
+        return renderTextField(field, draft.photo.link ?? '', (value) =>
+          patchDraft((current) => ({ ...current, photo: { ...current.photo, link: value } })),
+        );
+      case 'actions.0.label':
+        return renderTextField(field, draft.actions[0]?.label ?? '', (value) => updateAction(0, (action) => ({ ...action, label: value })));
+      case 'actions.0.url':
+        return renderTextField(field, draft.actions[0]?.url ?? '', (value) => updateAction(0, (action) => ({ ...action, url: value })), {
+          trailing: (
+            <div className="admin-inline-actions">
+              <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[0]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[0]?.url ?? '')}>
+                測試第一按鈕
+              </button>
+            </div>
+          ),
+        });
+      case 'actions.0.tone':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={draft.actions[0]?.tone ?? 'secondary'}
+            onChange={(value) => updateActionTone(0, value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={actionToneOptions}
+          />
+        );
+      case 'actions.0.enabled':
+        return (
+          <AdminToggleField
+            key={field.key}
+            label={field.label}
+            checked={draft.actions[0]?.enabled !== false}
+            onChange={(checked) => updateAction(0, (action) => ({ ...action, enabled: checked }))}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+          />
+        );
+      case 'actions.1.label':
+        return renderTextField(field, draft.actions[1]?.label ?? '', (value) => updateAction(1, (action) => ({ ...action, label: value })));
+      case 'actions.1.url':
+        return renderTextField(field, draft.actions[1]?.url ?? '', (value) => updateAction(1, (action) => ({ ...action, url: value })), {
+          trailing: (
+            <div className="admin-inline-actions">
+              <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[1]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[1]?.url ?? '')}>
+                測試第二按鈕
+              </button>
+            </div>
+          ),
+        });
+      case 'actions.1.tone':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={draft.actions[1]?.tone ?? 'secondary'}
+            onChange={(value) => updateActionTone(1, value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={actionToneOptions}
+          />
+        );
+      case 'actions.1.enabled':
+        return (
+          <AdminToggleField
+            key={field.key}
+            label={field.label}
+            checked={draft.actions[1]?.enabled !== false}
+            onChange={(checked) => updateAction(1, (action) => ({ ...action, enabled: checked }))}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+          />
+        );
+      case 'share.buttonLabel':
+        return renderTextField(field, draft.share.buttonLabel ?? '', (value) =>
+          patchDraft((current) => ({ ...current, share: { ...current.share, buttonLabel: value } })),
+        );
+      case 'share.title':
+        return renderTextField(field, draft.share.title ?? '', (value) =>
+          patchDraft((current) => ({ ...current, share: { ...current.share, title: value } })),
+        );
+      case 'share.text':
+        return renderTextField(field, draft.share.text ?? '', (value) =>
+          patchDraft((current) => ({ ...current, share: { ...current.share, text: value } })),
+        );
+      case 'seo.title':
+        return renderTextField(field, draft.seo.title, (value) =>
+          patchDraft((current) => ({ ...current, seo: { ...current.seo, title: value } })),
+        );
+      case 'seo.description':
+        return renderTextField(field, draft.seo.description, (value) =>
+          patchDraft((current) => ({ ...current, seo: { ...current.seo, description: value } })),
+        );
+      case 'seo.ogTitle':
+        return renderTextField(field, draft.seo.ogTitle, (value) =>
+          patchDraft((current) => ({ ...current, seo: { ...current.seo, ogTitle: value } })),
+        );
+      case 'seo.ogDescription':
+        return renderTextField(field, draft.seo.ogDescription, (value) =>
+          patchDraft((current) => ({ ...current, seo: { ...current.seo, ogDescription: value } })),
+        );
+      case 'seo.ogImage':
+        return renderTextField(
+          field,
+          draft.seo.ogImage,
+          (value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogImage: value } })),
+          {
+            trailing: (
+              <div className="admin-inline-actions admin-inline-actions-3">
+                <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('ogImage')}>
+                  上傳分享圖
+                </button>
+                <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.seo.ogImage)} onClick={() => openExternalUrl(draft.seo.ogImage)}>
+                  開新分頁測試
+                </button>
+              </div>
+            ),
+          },
+        );
+      case 'slug':
+        return renderTextField(field, draft.slug, () => undefined, { readOnly: true });
+      case 'id':
+        return renderTextField(field, draft.id, () => undefined, { readOnly: true });
+      case 'isPrimary':
+        return renderTextField(field, toReadableBoolean(draft.isPrimary), () => undefined, { readOnly: true });
+      case 'legacySlugs':
+        return renderTextField(field, serializeStringList(draft.legacySlugs), () => undefined, {
+          readOnly: true,
+          textareaRows: 3,
+        });
+      case 'appearance.theme':
+        return renderTextField(field, draft.appearance.theme, () => undefined, { readOnly: true });
+      case 'appearance.layout':
+        return renderTextField(field, draft.appearance.layout, () => undefined, { readOnly: true });
+      case 'actions.0.id':
+        return renderTextField(field, draft.actions[0]?.id ?? '', () => undefined, { readOnly: true });
+      case 'actions.1.id':
+        return renderTextField(field, draft.actions[1]?.id ?? '', () => undefined, { readOnly: true });
+      default:
+        return null;
+    }
+  };
+
+  const renderFieldGroup = (groupKey: AdminFieldGroupKey) => {
+    const fields = CARD_RUNTIME_FIELDS_BY_GROUP[groupKey];
+    const group = ADMIN_FIELD_GROUPS_BY_KEY[groupKey];
+    if (!fields.length) {
+      return null;
+    }
+
+    return (
+      <section key={group.key} className="admin-panel">
+        <div className="admin-section-heading">
+          <p className="section-label">欄位分組</p>
+          <h2 className="admin-panel-title">{group.label}</h2>
+          <p className="support-copy">{group.description}</p>
+        </div>
+        <div className="admin-field-grid">{fields.map((field) => renderField(field))}</div>
+        {groupKey === 'assets' ? (
+          <>
+            <input ref={photoUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('photo', event)} />
+            <input ref={ogUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('ogImage', event)} />
+            <div className="admin-image-preview-grid">
+              <div className="admin-image-preview-card">
+                <p className="section-label">主視覺預覽</p>
+                {isImagePreviewable(draft.photo.src) ? <img src={draft.photo.src} alt={draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的正式圖片 URL。</p>}
+              </div>
+              <div className="admin-image-preview-card">
+                <p className="section-label">分享圖預覽</p>
+                {isImagePreviewable(draft.seo.ogImage) ? <img src={draft.seo.ogImage} alt={draft.seo.ogTitle || draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的 OG Image URL。</p>}
+              </div>
+            </div>
+            <StatusBanner status={assetUploadStatus} />
+          </>
+        ) : null}
+      </section>
+    );
   };
 
   async function loadRemoteIntoDraft(skipDirtyConfirm = false, sessionToken = adminSession) {
@@ -729,7 +1135,8 @@ export function AdminPage() {
             onChange={setUnlockSecret}
             type="password"
             placeholder="輸入 ADMIN_WRITE_SECRET"
-            hint="前端不保存真正 secret；送出後只保留短期 admin session 到 sessionStorage。"
+            helpText="前端不保存真正 secret；送出後只保留短期 admin session 到 sessionStorage。"
+            badgeLabel="系統"
           />
           <div className="admin-inline-actions">
             <button type="button" className="action-button action-button-primary" onClick={() => void handleUnlock()}>
@@ -781,146 +1188,16 @@ export function AdminPage() {
 
           <section className="admin-layout">
             <div className="admin-form-column">
-              <section className="admin-panel">
-                <div className="admin-section-heading">
-                  <p className="section-label">基本資料</p>
-                  <h2 className="admin-panel-title">卡片主資訊</h2>
-                </div>
-                <div className="admin-field-grid">
-                  <AdminTextField label="姓名" value={draft.content.fullName} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, fullName: value } }))} placeholder="例如 蘇彥宇 Sunner" hint={fieldDescriptionByLabel.姓名} />
-                  <AdminTextField label="職稱" value={draft.content.title} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, title: value } }))} placeholder="例如 品牌顧問 / Creative Strategist" hint={fieldDescriptionByLabel.職稱} />
-                  <AdminTextField label="品牌名稱" value={draft.content.brandName} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, brandName: value } }))} placeholder="例如 SUNNER Studio" hint={fieldDescriptionByLabel.品牌名稱} />
-                  <AdminTextField label="分享區標題" value={draft.content.sharePanelTitle} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, sharePanelTitle: value } }))} placeholder="例如 分享這張名片" hint={fieldDescriptionByLabel.分享區標題} />
-                </div>
-              </section>
+              {ADMIN_FIELD_GROUPS.filter((group) => group.key !== 'system').map((group) => renderFieldGroup(group.key))}
 
               <section className="admin-panel">
-                <div className="admin-section-heading">
-                  <p className="section-label">品牌文案</p>
-                  <h2 className="admin-panel-title">前台與 Flex 主要文案</h2>
-                </div>
-                <div className="admin-field-grid">
-                  <AdminTextField label="主標" value={draft.content.headline} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, headline: value } }))} textareaRows={2} hint={fieldDescriptionByLabel.主標} full />
-                  <AdminTextField label="副標" value={draft.content.subheadline} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, subheadline: value } }))} textareaRows={2} hint={fieldDescriptionByLabel.副標} full />
-                  <AdminTextField label="介紹文字" value={draft.content.intro} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, intro: value } }))} textareaRows={5} hint={fieldDescriptionByLabel.介紹文字} full />
-                  <AdminTextField label="行動區標題" value={draft.content.actionsTitle} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, actionsTitle: value } }))} hint={fieldDescriptionByLabel.行動區標題} />
-                  <AdminTextField label="行動區說明" value={draft.content.actionsDescription} onChange={(value) => patchDraft((current) => ({ ...current, content: { ...current.content, actionsDescription: value } }))} textareaRows={3} hint={fieldDescriptionByLabel.行動區說明} />
-                </div>
-              </section>
-
-              <section className="admin-panel">
-                <div className="admin-section-heading">
-                  <p className="section-label">圖片資產</p>
-                  <h2 className="admin-panel-title">Google Drive 上傳與正式圖片</h2>
-                </div>
-                <div className="admin-field-grid">
-                  <AdminTextField
-                    label="正式圖片 URL"
-                    value={draft.photo.src}
-                    onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, src: value } }))}
-                    hint={fieldDescriptionByLabel['正式圖片 URL']}
-                    error={photoFieldError}
-                    full
-                    trailing={
-                      <div className="admin-inline-actions admin-inline-actions-3">
-                        <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('photo')}>
-                          上傳頭像 / 主視覺
-                        </button>
-                        <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.photo.src)} onClick={() => openExternalUrl(draft.photo.src)}>
-                          開新分頁測試
-                        </button>
-                      </div>
-                    }
-                  />
-                  <AdminTextField label="照片替代文字" value={draft.photo.alt} onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, alt: value } }))} hint={fieldDescriptionByLabel.照片替代文字} />
-                  <AdminTextField label="照片點擊連結" value={draft.photo.link ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, photo: { ...current.photo, link: value } }))} hint={fieldDescriptionByLabel.照片點擊連結} error={photoLinkError} />
-                  <AdminTextField
-                    label="OG Image URL"
-                    value={draft.seo.ogImage}
-                    onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogImage: value } }))}
-                    hint={fieldDescriptionByLabel['OG Image URL']}
-                    error={ogImageFieldError}
-                    full
-                    trailing={
-                      <div className="admin-inline-actions admin-inline-actions-3">
-                        <button type="button" className="action-button action-button-secondary" onClick={() => handleAssetUploadClick('ogImage')}>
-                          上傳分享圖
-                        </button>
-                        <button type="button" className="action-button action-button-secondary" disabled={!isHttpUrl(draft.seo.ogImage)} onClick={() => openExternalUrl(draft.seo.ogImage)}>
-                          開新分頁測試
-                        </button>
-                      </div>
-                    }
-                  />
-                </div>
-                <input ref={photoUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('photo', event)} />
-                <input ref={ogUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('ogImage', event)} />
-                <div className="admin-image-preview-grid">
-                  <div className="admin-image-preview-card">
-                    <p className="section-label">主視覺預覽</p>
-                    {isImagePreviewable(draft.photo.src) ? <img src={draft.photo.src} alt={draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的正式圖片 URL。</p>}
+                <details className="admin-system-details" open={ADMIN_FIELD_GROUPS_BY_KEY.system.defaultOpen}>
+                  <summary className="admin-details-summary">系統欄位與保留設定</summary>
+                  <div className="admin-details-body">
+                    <p className="support-copy">{ADMIN_FIELD_GROUPS_BY_KEY.system.description}</p>
+                    <div className="admin-field-grid">{CARD_RUNTIME_FIELDS_BY_GROUP.system.map((field) => renderField(field))}</div>
                   </div>
-                  <div className="admin-image-preview-card">
-                    <p className="section-label">分享圖預覽</p>
-                    {isImagePreviewable(draft.seo.ogImage) ? <img src={draft.seo.ogImage} alt={draft.seo.ogTitle || draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的 OG Image URL。</p>}
-                  </div>
-                </div>
-                <StatusBanner status={assetUploadStatus} />
-              </section>
-
-              <section className="admin-panel">
-                <div className="admin-section-heading">
-                  <p className="section-label">按鈕設定</p>
-                  <h2 className="admin-panel-title">前台 CTA 與 Flex footer</h2>
-                </div>
-                <div className="admin-field-grid">
-                  <AdminTextField label="第一按鈕文案" value={draft.actions[0]?.label ?? ''} onChange={(value) => updateAction(0, (action) => ({ ...action, label: value }))} hint={fieldDescriptionByLabel.第一按鈕文案} />
-                  <AdminTextField
-                    label="第一按鈕連結"
-                    value={draft.actions[0]?.url ?? ''}
-                    onChange={(value) => updateAction(0, (action) => ({ ...action, url: value }))}
-                    hint={fieldDescriptionByLabel.第一按鈕連結}
-                    error={firstActionLinkError}
-                    trailing={
-                      <div className="admin-inline-actions">
-                        <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[0]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[0]?.url ?? '')}>
-                          測試第一按鈕
-                        </button>
-                      </div>
-                    }
-                  />
-                  <AdminTextField label="第二按鈕文案" value={draft.actions[1]?.label ?? ''} onChange={(value) => updateAction(1, (action) => ({ ...action, label: value }))} hint={fieldDescriptionByLabel.第二按鈕文案} />
-                  <AdminTextField
-                    label="第二按鈕連結"
-                    value={draft.actions[1]?.url ?? ''}
-                    onChange={(value) => updateAction(1, (action) => ({ ...action, url: value }))}
-                    hint={fieldDescriptionByLabel.第二按鈕連結}
-                    error={secondActionLinkError}
-                    trailing={
-                      <div className="admin-inline-actions">
-                        <button type="button" className="action-button action-button-secondary" disabled={!isAllowedLink(draft.actions[1]?.url ?? '')} onClick={() => openExternalUrl(draft.actions[1]?.url ?? '')}>
-                          測試第二按鈕
-                        </button>
-                      </div>
-                    }
-                  />
-                </div>
-              </section>
-
-              <section className="admin-panel">
-                <div className="admin-section-heading">
-                  <p className="section-label">分享設定</p>
-                  <h2 className="admin-panel-title">Web Share fallback 與 SEO</h2>
-                </div>
-                <div className="admin-field-grid">
-                  <AdminTextField label="分享標題" value={draft.share.title ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, title: value } }))} hint={fieldDescriptionByLabel.分享標題} />
-                  <AdminTextField label="分享按鈕文案" value={draft.share.buttonLabel ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, buttonLabel: value } }))} hint={fieldDescriptionByLabel.分享按鈕文案} />
-                  <AdminTextField label="分享文字" value={draft.share.text ?? ''} onChange={(value) => patchDraft((current) => ({ ...current, share: { ...current.share, text: value } }))} textareaRows={4} hint={fieldDescriptionByLabel.分享文字} full />
-                  <AdminTextField label="SEO Title" value={draft.seo.title} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, title: value } }))} hint="顯示在瀏覽器 title 與搜尋結果標題。" />
-                  <AdminTextField label="SEO Description" value={draft.seo.description} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, description: value } }))} textareaRows={3} hint="顯示在搜尋結果描述與社群分享描述。" />
-                  <AdminTextField label="OG Title" value={draft.seo.ogTitle} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogTitle: value } }))} hint="社群分享卡片標題。" />
-                  <AdminTextField label="OG Description" value={draft.seo.ogDescription} onChange={(value) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogDescription: value } }))} textareaRows={3} hint="社群分享卡片描述。" />
-                </div>
+                </details>
               </section>
 
               <section className="admin-panel">
@@ -929,8 +1206,8 @@ export function AdminPage() {
                   <h2 className="admin-panel-title">儲存、重載與 session 狀態</h2>
                 </div>
                 <div className="admin-field-grid">
-                  <AdminTextField label="Updated By" value={updatedBy} onChange={setUpdatedBy} placeholder="例如 admin@sunner.tw" hint={fieldDescriptionByLabel['Updated By']} />
-                  <AdminTextField label="更新時間" value={lastSavedAt ?? ''} onChange={() => undefined} hint="最後一次成功儲存後會顯示 updatedAt。" readOnly />
+                  <AdminTextField label="Updated By" value={updatedBy} onChange={setUpdatedBy} placeholder="例如 admin@sunner.tw" helpText="saveCard request 會把這個欄位送到 `updatedBy`，方便追蹤最後修改者。" badgeLabel="系統" />
+                  <AdminTextField label="更新時間" value={lastSavedAt ?? ''} onChange={() => undefined} helpText="最後一次成功儲存後，後台回傳的 `updatedAt` 會顯示在這裡。" badgeLabel="系統" readOnly />
                   <div className="admin-info-card">
                     <p className="section-label">解鎖狀態</p>
                     <p className="support-copy">{isUnlocked ? '目前已解鎖，可儲存與上傳圖片。' : '尚未解鎖，儲存與圖片上傳會被擋下。'}</p>
@@ -983,7 +1260,8 @@ export function AdminPage() {
                       value={importText}
                       onChange={setImportText}
                       textareaRows={10}
-                      hint="方便比對與手動貼上 runtime config。"
+                      helpText="方便比對與手動貼上 runtime config。"
+                      badgeLabel="系統"
                       full
                     />
                   </div>

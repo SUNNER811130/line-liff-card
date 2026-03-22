@@ -441,6 +441,18 @@ button:disabled {
   color: var(--muted);
 }
 
+.admin-visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(24, 54, 95, 0.08);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .admin-inline-error {
   color: #8b2f2f;
 }
@@ -563,6 +575,13 @@ button:disabled {
   font-weight: 700;
 }
 
+.admin-toggle-field {
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(24, 39, 61, 0.08);
+  background: rgba(248, 250, 252, 0.72);
+}
+
 .admin-toggle input {
   width: 18px;
   height: 18px;
@@ -595,6 +614,11 @@ button:disabled {
   display: grid;
   gap: 16px;
   margin-top: 18px;
+}
+
+.admin-system-details {
+  display: grid;
+  gap: 16px;
 }
 
 .admin-panel-sticky {

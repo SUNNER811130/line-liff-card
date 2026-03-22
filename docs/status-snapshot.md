@@ -5,6 +5,7 @@
 - `.clasp.json` 目前綁定正式 standalone GAS `1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
 - 正式 exec URL 已固定為 `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
 - `.env.local` 與 `.env.production` 的 `VITE_CARD_API_BASE_URL` 已與正式 exec URL 對齊
+- library URL 已確認不是前台 `VITE_CARD_API_BASE_URL`，也不是 runtime backend API
 - shell env 已設為：
   - `CARD_RUNTIME_SHEET_ID=1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
   - `CARD_RUNTIME_SHEET_NAME=cards_runtime`
@@ -21,6 +22,12 @@
 
 1. `VITE_CARD_API_BASE_URL` 指向的遠端正式資料來源
 2. bundled [src/content/cards/default.ts](/home/usersun/projects/line-liff-card/src/content/cards/default.ts)
+
+目前只承認這一個正式 backend exec URL：
+
+- `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+
+若文件提到舊 deployment，僅能作為歷史資訊；不要把 library URL 當成 backend API。
 
 ## 後台現況
 
@@ -58,6 +65,15 @@
   - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 - `POST initBackend`
   - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- `POST saveCard`
+  - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- `/admin/`
+  - repo 端 load/save wiring 與測試都已通過
+  - 但 live `load remote` 會卡在 `getCard(default)` 同一個 Spreadsheet 錯誤
+  - live `save remote` 會卡在 `saveCard` 同一個 Spreadsheet 錯誤
+- 前台 remote config / share Flex
+  - 程式碼路徑都使用同一份 runtime config
+  - 但 live remote backend 未通，所以目前實際執行仍會 fallback bundled config
 - manifest 已補最小必要 scopes：
   - `https://www.googleapis.com/auth/spreadsheets`
   - `https://www.googleapis.com/auth/drive.readonly`

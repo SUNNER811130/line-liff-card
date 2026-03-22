@@ -2,7 +2,7 @@
 
 ## 專案一句話
 
-這是單一正式卡 `default` 的 LINE 電子名片站。前台與 `/admin/` 的 runtime 路徑都已接好，正式 Apps Script deployment 與前端 env 也都已指向同一個正式 exec URL；目前唯一阻塞仍是正式 GAS 無法開啟指定的正式 Google Sheet，導致 runtime 資料尚未初始化成功。
+這是單一正式卡 `default` 的 LINE 電子名片站。前台與 `/admin/` 的 runtime 路徑都已接好，正式 Apps Script deployment 與前端 env 也都已指向同一個正式 exec URL；library URL 已確認不是前台 API。現在唯一阻塞仍是正式 GAS 無法開啟指定的正式 Google Sheet，導致 runtime 資料尚未初始化成功。
 
 ## 先確認的產品規則
 
@@ -39,6 +39,12 @@
 4. remote JSON 經 `assertCardConfig()`
 5. 成功就用 remote；失敗就 fallback bundled
 6. `CardPage` 與 `shareDigitalCard()` 都吃同一份 runtime config
+
+正式 backend 只承認這一個 exec URL：
+
+- `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+
+不要把 library URL 當成 backend API；若看到舊 deployment，只能當歷史資訊。
 
 ## Admin 規則
 
@@ -101,11 +107,17 @@ scaffold：
   - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 - live `initBackend`：
   - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- live `saveCard(default)`：
+  - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 - `debugOpenSheet()` 仍保留在正式 GAS，可用來驗證目標 Sheet 是否真的可由此專案打開
 - manifest 已顯式補上最小必要 scopes：
   - `https://www.googleapis.com/auth/spreadsheets`
   - `https://www.googleapis.com/auth/drive.readonly`
 - 這表示目前真正問題仍收斂成 Google 端拒絕把 `1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg` 當成可由此正式 GAS 開啟的 Spreadsheet；不是 repo 綁錯 script、不是舊 deployment、也不是前端 URL 指錯
+- `/admin/` 真正 load/save 目前都還不能 live 成功：
+  - load 受阻於 `getCard(default)` 同一錯誤
+  - save 受阻於 `saveCard(default)` 同一錯誤
+- 前台 remote config / share Flex 雖然 wiring 都吃同一份 runtime config，但在 live backend 未通前，實際仍只會 fallback bundled config
 - 下個接手者不要再重新建立 GAS 專案；請直接在現有正式 Apps Script 專案內確認：
   - 這個 ID 是否真的是 Google 試算表 ID
   - 同一帳號在 Apps Script UI 內再次執行 `debugOpenSheet()`，確認 `DriveApp.getFileById()` 與 `SpreadsheetApp.openById()` 的實際結果

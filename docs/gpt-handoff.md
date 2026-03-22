@@ -102,6 +102,11 @@ scaffold：
   - `CARD_RUNTIME_SHEET_ID=1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
   - `CARD_RUNTIME_SHEET_NAME=cards_runtime`
   - `CARD_ADMIN_WRITE_TOKEN` 已存在
+- Apps Script UI 也已再次人工確認新的正式 deployment：
+  - `Type = Web app`
+  - `Execute as = Me (sunner811130@gmail.com)`
+  - `Who has access = Anyone`
+  - Google 這次沒有再跳 deployment runtime 授權畫面，已視為正常
 - 已把 `Code.gs` 的 `health` 改成真正檢查 Sheet 可存取性，避免再出現「health 綠燈、getCard 才爆」的假健康狀態
 - 已新增 `debugRuntimeAccess`，live 可直接回報 scriptId / serviceUrl / configured sheetId / sheetAccessible
 - 但 2026-03-22 live `health` 仍直接回：
@@ -131,9 +136,4 @@ scaffold：
   - load 受阻於 `getCard(default)` 同一錯誤
   - save 受阻於 `saveCard(default)` 同一錯誤
 - 前台 remote config / share Flex 雖然 wiring 都吃同一份 runtime config，但在 live backend 未通前，實際仍只會 fallback bundled config
-- 下個接手者不要再重新建立 GAS 專案；現在只剩一個 Google UI 手動步驟：
-  - 在同一支正式 standalone GAS 的 Apps Script UI 內，對新的 deployment `AKfycbx7...` 進入 Manage deployments
-  - 確認它是 `Web app`
-  - 確認 `Execute as: Me (sunner811130@gmail.com)`
-  - 確認 `Who has access: Anyone`
-  - 按一次重新部署 / 更新，若跳 deployment runtime 授權同意畫面，就完成那次同意
+- 下個接手者不要再重新建立 GAS 專案，也不要再把問題往舊 deployment 或 library URL 方向追；Apps Script UI 設定已人工確認完成，但 live backend 仍回相同 Spreadsheet access 錯誤

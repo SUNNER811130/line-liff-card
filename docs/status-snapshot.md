@@ -46,6 +46,11 @@
 ## 目前阻塞點
 
 - `.clasp.json`、新的 `.env.local`、新的 `.env.production` 都已收斂到同一個乾淨正式 deployment，不需要再重建 GAS 專案
+- Apps Script UI 內新的正式 deployment `AKfycbx7...` 已人工確認：
+  - `Type = Web app`
+  - `Execute as = Me (sunner811130@gmail.com)`
+  - `Who has access = Anyone`
+  - Google 這次沒有再跳 deployment runtime 授權畫面，已視為正常
 - 已完成：
   - `clasp push --force`
   - version `11`
@@ -98,14 +103,17 @@
   - `https://www.googleapis.com/auth/spreadsheets`
   - `https://www.googleapis.com/auth/drive.readonly`
 
-## 剩餘唯一手動步驟
+## 結論
 
-- 在同一支正式 standalone GAS 的 Apps Script UI 內，針對新的正式 deployment `AKfycbx7...` 進入 Manage deployments
-- 明確確認它是 `Web app`
-- 明確確認 `Execute as: Me (sunner811130@gmail.com)`
-- 明確確認 `Who has access: Anyone`
-- 按一次重新部署 / 更新，若 Google 再跳 deployment runtime 授權同意畫面，就完成那次同意
-- 除了這個 Google UI deployment runtime 步驟之外，repo 端可自動修的部分都已收斂完畢
+- 唯一正式 backend exec URL 已確認為 `AKfycbx7.../exec`
+- `.env.local` 與 `.env.production` 已對齊這個 URL
+- repo 端 wiring、測試、build、lint、smoke 都已完成
+- 但 live backend 仍無法打開 `cards_runtime`，所以：
+  - `default` 尚未成功 seed 到正式 runtime sheet
+  - `/admin/` live load/save 仍不可用
+  - 前台 live 仍只會 fallback bundled config
+  - 新分享出去的 Flex 目前也不可能吃到 live runtime config
+- 因此目前剩餘問題已不在 repo 端，也不是舊 deployment / library URL / env 指錯
 
 ## 驗證目標
 

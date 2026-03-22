@@ -285,6 +285,10 @@ repo 現在已提供 scaffold、前端 adapter、CLI 與文件，但不會假裝
 - 目前唯一正式資料來源目標仍是 `LIFF Card Runtime / cards_runtime`
 - repo 端的前台、`/admin/`、share/Flex wiring 已完成
 - 新舊 live deployment 都回相同錯誤，表示 stale deployment / 舊 code 已排除
+- Apps Script UI 內新的正式 deployment 已人工確認為：
+  - `Web app`
+  - `Execute as: Me (sunner811130@gmail.com)`
+  - `Who has access: Anyone`
+  - Google 沒有再跳 deployment runtime 授權畫面，已視為正常
 - 但在 `health` 轉綠之前，`/admin/` 真實 load/save、front page remote config、與新分享出去的 Flex live 驗證都還不能算打通
-- 若還有唯一需要人工處理的步驟，現在只剩：
-  - 在 Apps Script UI 的 Manage deployments 內，針對新的正式 deployment `AKfycbx7...` 明確確認 `Web app`、`Execute as: Me`、`Who has access: Anyone`，然後按一次更新並完成那次 deployment runtime 授權同意畫面
+- 因此目前沒有任何 repo 內可再自動完成的最後一步；剩餘阻塞已收斂成 live Web App 對目標 Spreadsheet 的存取仍失敗

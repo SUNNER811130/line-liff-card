@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "smoke:pages": "bash ./scripts/smoke-pages.sh",
     "provision:google-runtime": "node ./scripts/provision-google-runtime.mjs",
+    "google:oauth:bootstrap": "node ./scripts/google-oauth-bootstrap.mjs",
     "gas:setup": "node ./scripts/print-bound-gas-setup.mjs",
     "gas:deploy": "node ./scripts/print-bound-gas-setup.mjs --deploy",
     "gas:check": "bash ./scripts/check-runtime-backend.sh",

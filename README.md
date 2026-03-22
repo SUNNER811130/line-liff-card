@@ -66,6 +66,8 @@ slug | config_json | updated_at | updated_by
 - `npm run smoke:pages`
 - `npm run provision:google-runtime`
   - 自動建立 Spreadsheet、Drive folder、bound Apps Script、Script Properties、deployment、exec URL，並更新 `.env.production` / `.env.local`
+- `npm run google:oauth:bootstrap`
+  - 以本機 loopback callback 協助取得 user-owned OAuth refresh token
 - `npm run gas:setup`
   - 輸出 provision 流程與必要設定
 - `npm run gas:deploy`
@@ -85,13 +87,31 @@ VITE_CARD_API_BASE_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 
 ## Provision Secrets
 
-自動 provision 會使用 `.env.google.provision.local`，若檔案不存在會自動建立，至少包含：
+自動 provision 會使用 `.env.google.provision.local`，若檔案不存在會自動建立。
+
+Google auth 解析順序：
+
+1. `GOOGLE_CLIENT_AUTH=user_oauth` 時，優先讀 `.env.google.provision.local`
+2. 若 `GOOGLE_CLIENT_AUTH` 未設定或為 `clasprc`，fallback 到 `~/.clasprc.json`
+
+`.env.google.provision.local` 範例如下：
 
 ```bash
-GOOGLE_CLIENT_AUTH=clasprc
+GOOGLE_CLIENT_AUTH=user_oauth
+GOOGLE_OAUTH_CLIENT_ID=YOUR_DESKTOP_OAUTH_CLIENT_ID
+GOOGLE_OAUTH_CLIENT_SECRET=YOUR_DESKTOP_OAUTH_CLIENT_SECRET
+GOOGLE_OAUTH_REFRESH_TOKEN=YOUR_USER_REFRESH_TOKEN
 ADMIN_WRITE_SECRET=...
 ADMIN_SESSION_SECRET=...
 ADMIN_SESSION_TTL_SECONDS=3600
 ```
 
-Google OAuth 預設直接讀 `~/.clasprc.json` 內既有授權，避免把敏感值寫進 repo。
+若你要建立新的 user-owned OAuth refresh token：
+
+1. 先在 `.env.google.provision.local` 填入 `GOOGLE_CLIENT_AUTH=user_oauth`
+2. 先填好 `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`
+3. 執行 `npm run google:oauth:bootstrap`
+4. 依終端機輸出的 authorize URL 完成授權
+5. 把輸出的 `GOOGLE_OAUTH_REFRESH_TOKEN` 寫回 `.env.google.provision.local`
+
+如果沒有設定 `user_oauth`，腳本仍會沿用既有 `~/.clasprc.json` 授權。

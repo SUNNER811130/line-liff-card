@@ -6,7 +6,11 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import defaultCardSeed from '../src/content/cards/default.seed.json' with { type: 'json' };
-import { getGoogleAccessToken, loadOptionalEnvFile } from './lib/google-auth.mjs';
+import {
+  GOOGLE_CLIENT_AUTH_CLASPRC,
+  getGoogleAccessToken,
+  loadOptionalEnvFile,
+} from './lib/google-auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -40,7 +44,10 @@ async function ensureProvisionSecretsFile() {
   }
 
   const next = {
-    GOOGLE_CLIENT_AUTH: current.GOOGLE_CLIENT_AUTH || 'clasprc',
+    GOOGLE_CLIENT_AUTH: current.GOOGLE_CLIENT_AUTH || GOOGLE_CLIENT_AUTH_CLASPRC,
+    GOOGLE_OAUTH_CLIENT_ID: current.GOOGLE_OAUTH_CLIENT_ID || '',
+    GOOGLE_OAUTH_CLIENT_SECRET: current.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    GOOGLE_OAUTH_REFRESH_TOKEN: current.GOOGLE_OAUTH_REFRESH_TOKEN || '',
     ADMIN_WRITE_SECRET: current.ADMIN_WRITE_SECRET || randomSecret(24),
     ADMIN_SESSION_SECRET: current.ADMIN_SESSION_SECRET || randomSecret(32),
     ADMIN_SESSION_TTL_SECONDS: current.ADMIN_SESSION_TTL_SECONDS || ADMIN_TTL_SECONDS,
@@ -207,8 +214,8 @@ async function updateEnvFile(filePath, execUrl) {
 }
 
 async function main() {
-  const accessToken = await getGoogleAccessToken();
   const provisionEnv = await ensureProvisionSecretsFile();
+  const accessToken = await getGoogleAccessToken({ env: provisionEnv });
   const spreadsheetTitle = process.env.GOOGLE_RUNTIME_SPREADSHEET_TITLE || DEFAULT_SPREADSHEET_TITLE;
   const driveFolderName = process.env.GOOGLE_RUNTIME_DRIVE_FOLDER_NAME || DEFAULT_DRIVE_FOLDER_NAME;
 

@@ -2,8 +2,14 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-const CLASP_CREDENTIALS_PATH = path.join(os.homedir(), '.clasprc.json');
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+export const GOOGLE_CLIENT_AUTH_CLASPRC = 'clasprc';
+export const GOOGLE_CLIENT_AUTH_USER_OAUTH = 'user_oauth';
+const USER_OAUTH_REQUIRED_KEYS = [
+  'GOOGLE_OAUTH_CLIENT_ID',
+  'GOOGLE_OAUTH_CLIENT_SECRET',
+  'GOOGLE_OAUTH_REFRESH_TOKEN',
+];
 
 const parseDotEnv = (content) =>
   content
@@ -40,8 +46,13 @@ export async function loadOptionalEnvFile(filePath) {
   }
 }
 
+export function getClaspCredentialsPath() {
+  return path.join(os.homedir(), '.clasprc.json');
+}
+
 export async function loadClaspCredentials() {
-  const raw = await fs.readFile(CLASP_CREDENTIALS_PATH, 'utf8');
+  const claspCredentialsPath = getClaspCredentialsPath();
+  const raw = await fs.readFile(claspCredentialsPath, 'utf8');
   const data = JSON.parse(raw);
   const tokenSet = data?.tokens?.default;
 
@@ -54,7 +65,42 @@ export async function loadClaspCredentials() {
     clientSecret: tokenSet.client_secret,
     refreshToken: tokenSet.refresh_token,
     accessToken: tokenSet.access_token,
+    authSource: claspCredentialsPath,
   };
+}
+
+export function loadUserOAuthCredentials(env = {}) {
+  const missingKeys = USER_OAUTH_REQUIRED_KEYS.filter((key) => !String(env[key] ?? '').trim());
+  if (missingKeys.length > 0) {
+    throw new Error(
+      `Missing user-owned Google OAuth env keys: ${missingKeys.join(', ')}. ` +
+        'Populate them in .env.google.provision.local or switch GOOGLE_CLIENT_AUTH=clasprc.',
+    );
+  }
+
+  return {
+    clientId: env.GOOGLE_OAUTH_CLIENT_ID.trim(),
+    clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET.trim(),
+    refreshToken: env.GOOGLE_OAUTH_REFRESH_TOKEN.trim(),
+    authSource: GOOGLE_CLIENT_AUTH_USER_OAUTH,
+  };
+}
+
+export async function loadGoogleAuthCredentials({ env = {} } = {}) {
+  const authMode = String(env.GOOGLE_CLIENT_AUTH ?? '').trim();
+
+  if (authMode === GOOGLE_CLIENT_AUTH_USER_OAUTH) {
+    return loadUserOAuthCredentials(env);
+  }
+
+  if (authMode === '' || authMode === GOOGLE_CLIENT_AUTH_CLASPRC) {
+    return loadClaspCredentials();
+  }
+
+  throw new Error(
+    `Unsupported GOOGLE_CLIENT_AUTH=${authMode}. ` +
+      `Use ${GOOGLE_CLIENT_AUTH_USER_OAUTH} or ${GOOGLE_CLIENT_AUTH_CLASPRC}.`,
+  );
 }
 
 export async function refreshGoogleAccessToken(credentials) {
@@ -81,7 +127,7 @@ export async function refreshGoogleAccessToken(credentials) {
   return payload.access_token;
 }
 
-export async function getGoogleAccessToken() {
-  const credentials = await loadClaspCredentials();
+export async function getGoogleAccessToken(options = {}) {
+  const credentials = await loadGoogleAuthCredentials(options);
   return refreshGoogleAccessToken(credentials);
 }

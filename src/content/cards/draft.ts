@@ -2,7 +2,10 @@ import { defaultCard } from './default';
 import { assertCardConfig } from './schema';
 import type { CardConfig } from './types';
 
-export const ADMIN_DRAFT_STORAGE_KEY = 'line-liff-card.admin-draft';
+export const ADMIN_DRAFT_STORAGE_KEY_PREFIX = 'line-liff-card.admin-draft';
+
+export const getAdminDraftStorageKey = (cardId: string): string =>
+  `${ADMIN_DRAFT_STORAGE_KEY_PREFIX}:${cardId.trim() || 'default'}`;
 
 export const cloneCardConfig = (config: CardConfig): CardConfig =>
   JSON.parse(JSON.stringify(config)) as CardConfig;

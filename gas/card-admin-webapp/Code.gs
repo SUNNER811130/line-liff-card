@@ -9,7 +9,7 @@ var ACTIONS = {
 
 var DEFAULT_SHEET_NAME = 'cards_runtime';
 var DEFAULT_RUNTIME_SLUG = 'default';
-var OFFICIAL_RUNTIME_SHEET_ID = '1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg';
+var OFFICIAL_RUNTIME_SHEET_ID = '12epmpzbyEzdvygO2K4Qkzpak9EUk0-kSTWIDiI1IqK3g';
 var OFFICIAL_RUNTIME_SHEET_NAME = 'cards_runtime';
 var REQUIRED_COLUMNS = ['slug', 'config_json', 'updated_at', 'updated_by'];
 var SCRIPT_PROPERTY_KEYS = {

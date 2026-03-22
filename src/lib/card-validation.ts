@@ -1,6 +1,6 @@
 import type { CardActionConfig, CardConfig } from '../content/cards/types';
 
-const isHttpUrl = (value: string): boolean => {
+export const isHttpUrl = (value: string): boolean => {
   try {
     const url = new URL(value);
     return url.protocol === 'http:' || url.protocol === 'https:';
@@ -9,12 +9,12 @@ const isHttpUrl = (value: string): boolean => {
   }
 };
 
-const isRelativeAssetPath = (value: string): boolean => {
+export const isRelativeAssetPath = (value: string): boolean => {
   const trimmed = value.trim();
   return Boolean(trimmed) && !trimmed.startsWith('//') && !/^[a-z]+:/i.test(trimmed) && !trimmed.startsWith('#');
 };
 
-const isAllowedLink = (value: string): boolean => {
+export const isAllowedLink = (value: string): boolean => {
   const trimmed = value.trim();
 
   if (!trimmed) {

@@ -21,6 +21,7 @@ export type SaveRuntimeCardResult = {
   config: CardConfig;
   slug: string;
   updatedAt?: string;
+  updatedBy?: string;
 };
 
 const DEFAULT_FETCH: FetchLike = (...args) => fetch(...args);
@@ -59,6 +60,7 @@ export async function fetchRemoteCardConfig(
 
   const response = await (options.fetchImpl ?? DEFAULT_FETCH)(buildCardApiUrl(baseUrl, { action: 'getCard', slug: expectedSlug }), {
     method: 'GET',
+    cache: 'no-store',
     signal: options.signal,
   });
   const payload = await readCardApiJsonResponse(response);
@@ -150,5 +152,6 @@ export async function saveRemoteCardConfig(
     config: validateRemoteConfig(responseConfig, expectedSlug),
     slug: expectedSlug,
     updatedAt: 'updatedAt' in payload ? payload.updatedAt : undefined,
+    updatedBy: 'updatedBy' in payload ? payload.updatedBy : undefined,
   };
 }

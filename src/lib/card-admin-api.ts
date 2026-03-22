@@ -63,6 +63,14 @@ export type UploadImageRequest = {
   base64Data: string;
 };
 
+export const createCardApiPostInit = (payload: Record<string, unknown>): RequestInit => ({
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/plain;charset=UTF-8',
+  },
+  body: JSON.stringify(payload),
+});
+
 export const buildCardApiUrl = (baseUrl: string, params: Record<string, string>): string => {
   const url = new URL(baseUrl);
   Object.entries(params).forEach(([key, value]) => {

@@ -3,6 +3,7 @@ import type { CardConfig } from '../content/cards/types';
 import { defaultCardSlug, getBundledCardBySlug, primaryCard } from '../content/cards';
 import {
   buildCardApiUrl,
+  createCardApiPostInit,
   type CreateAdminSessionRequest,
   extractConfigFromEnvelope,
   getCardApiErrorMessage,
@@ -157,13 +158,7 @@ export async function saveRemoteCardConfig(
     updatedBy: options.updatedBy?.trim() ?? '',
     adminSession,
   };
-  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, createCardApiPostInit(requestBody));
   const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {
@@ -200,13 +195,7 @@ export async function createAdminSession(
     action: 'createAdminSession',
     secret: trimmedSecret,
   };
-  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, createCardApiPostInit(requestBody));
   const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {
@@ -248,13 +237,7 @@ export async function verifyAdminSession(
     action: 'verifyAdminSession',
     adminSession: trimmedSession,
   };
-  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, createCardApiPostInit(requestBody));
   const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {
@@ -298,13 +281,7 @@ export async function uploadRuntimeImage(
     mimeType: options.mimeType.trim(),
     base64Data: options.base64Data.trim(),
   };
-  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, createCardApiPostInit(requestBody));
   const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {

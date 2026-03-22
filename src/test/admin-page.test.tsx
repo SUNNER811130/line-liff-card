@@ -137,6 +137,9 @@ describe('AdminPage', () => {
         'https://example.test/card-api',
         expect.objectContaining({
           method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=UTF-8',
+          },
           body: expect.stringContaining('"adminSession":"session-123"'),
         }),
       );

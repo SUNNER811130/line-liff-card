@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultCard } from '../content/cards/default';
 import {
   buildCardApiUrl,
+  createCardApiPostInit,
   extractConfigFromEnvelope,
   getCardApiErrorMessage,
   readCardApiJsonResponse,
@@ -12,6 +13,19 @@ describe('card admin api helpers', () => {
     expect(buildCardApiUrl('https://example.test/exec', { action: 'getCard', slug: 'default' })).toBe(
       'https://example.test/exec?action=getCard&slug=default',
     );
+  });
+
+  it('builds browser-safe POST init without JSON preflight headers', () => {
+    expect(createCardApiPostInit({ action: 'createAdminSession', secret: 'secret-123' })).toEqual({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=UTF-8',
+      },
+      body: JSON.stringify({
+        action: 'createAdminSession',
+        secret: 'secret-123',
+      }),
+    });
   });
 
   it('extracts config from direct or nested backend envelopes', () => {

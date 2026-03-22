@@ -11,7 +11,7 @@ if (!baseUrl) {
 
 const healthResponse = await fetch(buildHealthUrl(baseUrl));
 const healthJson = await parseBackendJson(healthResponse);
-if (!healthResponse.ok || healthJson.ok === false) {
+if (!healthResponse.ok || healthJson.ok === false || healthJson.sheetAccessible !== true) {
   console.error(healthJson.error || `Health check failed with HTTP ${healthResponse.status}.`);
   process.exit(1);
 }
@@ -20,7 +20,7 @@ console.log(JSON.stringify({ action: 'health', result: healthJson }, null, 2));
 
 const debugResponse = await fetch(buildDebugRuntimeAccessUrl(baseUrl));
 const debugJson = await parseBackendJson(debugResponse);
-if (!debugResponse.ok || debugJson.ok === false) {
+if (!debugResponse.ok || debugJson.ok === false || debugJson.sheetAccessible !== true) {
   console.error(debugJson.error || `debugRuntimeAccess failed with HTTP ${debugResponse.status}.`);
   process.exit(1);
 }

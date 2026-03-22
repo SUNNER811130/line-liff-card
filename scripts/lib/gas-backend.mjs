@@ -1,8 +1,8 @@
 export const CARD_API_ACTIONS = {
+  health: 'health',
+  initBackend: 'initBackend',
   getCard: 'getCard',
   saveCard: 'saveCard',
-  initBackend: 'initBackend',
-  health: 'health',
   debugRuntimeAccess: 'debugRuntimeAccess',
 };
 
@@ -60,6 +60,16 @@ export const buildInitBackendPayload = ({
   force,
   seedDefault,
 });
+
+export const extractDeploymentId = (text) => {
+  const match = String(text ?? '').match(/AKfycb[\w-]+/g);
+  return match ? match.at(-1) ?? '' : '';
+};
+
+export const extractVersionNumber = (text) => {
+  const match = String(text ?? '').match(/Created version (\d+)/);
+  return match?.[1] ?? '';
+};
 
 export const buildSaveCardPayload = ({
   writeToken,

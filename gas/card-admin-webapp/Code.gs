@@ -3,6 +3,9 @@ var ACTIONS = {
   initBackend: 'initBackend',
   getCard: 'getCard',
   saveCard: 'saveCard',
+  createAdminSession: 'createAdminSession',
+  verifyAdminSession: 'verifyAdminSession',
+  signUpload: 'signUpload',
   createRuntimeSheet: 'createRuntimeSheet',
   debugRuntimeAccess: 'debugRuntimeAccess',
 };
@@ -16,6 +19,13 @@ var SCRIPT_PROPERTY_KEYS = {
   sheetId: 'CARD_RUNTIME_SHEET_ID',
   sheetName: 'CARD_RUNTIME_SHEET_NAME',
   writeToken: 'CARD_ADMIN_WRITE_TOKEN',
+  adminWriteSecret: 'ADMIN_WRITE_SECRET',
+  adminSessionSecret: 'ADMIN_SESSION_SECRET',
+  adminSessionTtlSeconds: 'ADMIN_SESSION_TTL_SECONDS',
+  cloudinaryCloudName: 'CLOUDINARY_CLOUD_NAME',
+  cloudinaryApiKey: 'CLOUDINARY_API_KEY',
+  cloudinaryApiSecret: 'CLOUDINARY_API_SECRET',
+  cloudinaryUploadFolder: 'CLOUDINARY_UPLOAD_FOLDER',
 };
 
 function doGet(e) {
@@ -58,12 +68,25 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  var payload = {};
   try {
-    var payload = parseRequestJson_(e);
+    payload = parseRequestJson_(e);
     var action = normalizeAction_(payload.action);
 
     if (action === ACTIONS.initBackend) {
       return successResponse_(action, initBackend_(payload));
+    }
+
+    if (action === ACTIONS.createAdminSession) {
+      return successResponse_(action, createAdminSession_(payload));
+    }
+
+    if (action === ACTIONS.verifyAdminSession) {
+      return successResponse_(action, verifyAdminSession_(payload));
+    }
+
+    if (action === ACTIONS.signUpload) {
+      return successResponse_(action, signUpload_(payload));
     }
 
     if (action === ACTIONS.createRuntimeSheet) {
@@ -75,7 +98,7 @@ function doPost(e) {
       return errorResponse_(action, 'Unsupported action.');
     }
 
-    verifyWriteToken_(payload.writeToken);
+    verifyAdminAccess_(payload);
 
     var slug = normalizeSlug_(payload.slug);
     if (!slug) {
@@ -187,6 +210,43 @@ function createRuntimeSheet_(payload) {
     },
     spreadsheetName: spreadsheet.getName(),
     spreadsheetUrl: spreadsheet.getUrl(),
+  };
+}
+
+function createAdminSession_(payload) {
+  verifyWriteToken_(payload.secret);
+  return buildAdminSessionPayload_();
+}
+
+function verifyAdminSession_(payload) {
+  var session = verifyAdminSessionToken_(payload.adminSession);
+  return {
+    valid: true,
+    expiresAt: session.expiresAt,
+  };
+}
+
+function signUpload_(payload) {
+  verifyAdminAccess_(payload);
+
+  var cloudName = sanitizeRequiredScriptProperty_(SCRIPT_PROPERTY_KEYS.cloudinaryCloudName);
+  var apiKey = sanitizeRequiredScriptProperty_(SCRIPT_PROPERTY_KEYS.cloudinaryApiKey);
+  var apiSecret = sanitizeRequiredScriptProperty_(SCRIPT_PROPERTY_KEYS.cloudinaryApiSecret);
+  var folder = sanitizeSheetName_(getScriptProperty_(SCRIPT_PROPERTY_KEYS.cloudinaryUploadFolder) || 'line-liff-card');
+  var slug = normalizeSlug_(payload.slug) || DEFAULT_RUNTIME_SLUG;
+  var field = normalizeAssetField_(payload.field);
+  var timestamp = Math.floor(new Date().getTime() / 1000);
+  var publicId = buildCloudinaryPublicId_(folder, slug, field, payload.fileName, timestamp);
+  var signatureBase = buildCloudinarySignatureBase_(folder, publicId, timestamp);
+
+  return {
+    cloudName: cloudName,
+    apiKey: apiKey,
+    folder: folder,
+    timestamp: timestamp,
+    signature: computeSha1Hex_(signatureBase + apiSecret),
+    publicId: publicId,
+    uploadUrl: 'https://api.cloudinary.com/v1_1/' + encodeURIComponent(cloudName) + '/image/upload',
   };
 }
 
@@ -398,19 +458,149 @@ function getScriptProperty_(key) {
 }
 
 function canBootstrapBackend_(payload) {
-  var configuredWriteToken = normalizeToken_(getScriptProperty_(SCRIPT_PROPERTY_KEYS.writeToken));
+  var configuredWriteToken = normalizeToken_(getConfiguredAdminWriteSecret_());
   return !configuredWriteToken && !!sanitizeSheetId_(payload.sheetId) && !!normalizeToken_(payload.writeToken);
 }
 
 function verifyWriteToken_(candidateToken) {
-  var configuredToken = normalizeToken_(getScriptProperty_(SCRIPT_PROPERTY_KEYS.writeToken));
+  var configuredToken = normalizeToken_(getConfiguredAdminWriteSecret_());
   if (!configuredToken) {
-    throw new Error('CARD_ADMIN_WRITE_TOKEN is not configured.');
+    throw new Error('Admin write secret is not configured.');
   }
 
   if (normalizeToken_(candidateToken) !== configuredToken) {
     throw new Error('Invalid write token.');
   }
+}
+
+function verifyAdminAccess_(payload) {
+  if (normalizeToken_(payload.adminSession)) {
+    verifyAdminSessionToken_(payload.adminSession);
+    return;
+  }
+
+  verifyWriteToken_(payload.writeToken);
+}
+
+function getConfiguredAdminWriteSecret_() {
+  return (
+    normalizeToken_(getScriptProperty_(SCRIPT_PROPERTY_KEYS.adminWriteSecret)) ||
+    normalizeToken_(getScriptProperty_(SCRIPT_PROPERTY_KEYS.writeToken))
+  );
+}
+
+function buildAdminSessionPayload_() {
+  var ttlSeconds = readAdminSessionTtlSeconds_();
+  var expiresAtMs = new Date().getTime() + ttlSeconds * 1000;
+  var payload = {
+    exp: expiresAtMs,
+  };
+  var encodedPayload = Utilities.base64EncodeWebSafe(JSON.stringify(payload)).replace(/=+$/g, '');
+  var signature = signAdminSessionPayload_(encodedPayload);
+
+  return {
+    adminSession: encodedPayload + '.' + signature,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    ttlSeconds: ttlSeconds,
+  };
+}
+
+function verifyAdminSessionToken_(token) {
+  var normalizedToken = normalizeToken_(token);
+  if (!normalizedToken) {
+    throw new Error('adminSession is required.');
+  }
+
+  var segments = normalizedToken.split('.');
+  if (segments.length !== 2) {
+    throw new Error('Invalid admin session.');
+  }
+
+  var encodedPayload = segments[0];
+  var signature = segments[1];
+  if (signAdminSessionPayload_(encodedPayload) !== signature) {
+    throw new Error('Admin session signature mismatch.');
+  }
+
+  var payload = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(encodedPayload)).getDataAsString());
+  if (!payload || typeof payload.exp !== 'number') {
+    throw new Error('Admin session payload is invalid.');
+  }
+
+  if (payload.exp <= new Date().getTime()) {
+    throw new Error('Admin session expired.');
+  }
+
+  return {
+    expiresAt: new Date(payload.exp).toISOString(),
+  };
+}
+
+function signAdminSessionPayload_(encodedPayload) {
+  var secret = getAdminSessionSigningSecret_();
+  var signatureBytes = Utilities.computeHmacSha256Signature(encodedPayload, secret);
+  return Utilities.base64EncodeWebSafe(signatureBytes).replace(/=+$/g, '');
+}
+
+function getAdminSessionSigningSecret_() {
+  return normalizeToken_(getScriptProperty_(SCRIPT_PROPERTY_KEYS.adminSessionSecret)) || normalizeToken_(getConfiguredAdminWriteSecret_());
+}
+
+function readAdminSessionTtlSeconds_() {
+  var rawValue = Number(getScriptProperty_(SCRIPT_PROPERTY_KEYS.adminSessionTtlSeconds) || 1800);
+  if (!isFinite(rawValue) || rawValue <= 0) {
+    return 1800;
+  }
+
+  return Math.floor(rawValue);
+}
+
+function sanitizeRequiredScriptProperty_(key) {
+  var value = normalizeToken_(getScriptProperty_(key));
+  if (!value) {
+    throw new Error(key + ' is not configured.');
+  }
+
+  return value;
+}
+
+function normalizeAssetField_(value) {
+  var normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'asset';
+}
+
+function buildCloudinaryPublicId_(folder, slug, field, fileName, timestamp) {
+  var baseFileName = String(fileName || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  var fileToken = baseFileName || 'upload';
+  return folder + '/' + slug + '/' + field + '-' + timestamp + '-' + fileToken;
+}
+
+function buildCloudinarySignatureBase_(folder, publicId, timestamp) {
+  return 'folder=' + folder + '&public_id=' + publicId + '&timestamp=' + timestamp;
+}
+
+function computeSha1Hex_(value) {
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, value, Utilities.Charset.UTF_8);
+  return digest
+    .map(function (byte) {
+      var normalized = byte;
+      if (normalized < 0) {
+        normalized += 256;
+      }
+
+      var hex = normalized.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    })
+    .join('');
 }
 
 function normalizeSlug_(value) {

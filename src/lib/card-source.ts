@@ -3,9 +3,13 @@ import type { CardConfig } from '../content/cards/types';
 import { defaultCardSlug, getBundledCardBySlug, primaryCard } from '../content/cards';
 import {
   buildCardApiUrl,
+  type CreateAdminSessionRequest,
   extractConfigFromEnvelope,
   getCardApiErrorMessage,
   readCardApiJsonResponse,
+  type SaveCardRequest,
+  type SignUploadRequest,
+  type VerifyAdminSessionRequest,
 } from './card-admin-api';
 import { getCanonicalCardSlug } from './routes';
 
@@ -22,6 +26,26 @@ export type SaveRuntimeCardResult = {
   slug: string;
   updatedAt?: string;
   updatedBy?: string;
+};
+
+export type AdminSessionResult = {
+  adminSession: string;
+  expiresAt: string;
+};
+
+export type VerifyAdminSessionResult = {
+  valid: boolean;
+  expiresAt?: string;
+};
+
+export type UploadSignatureResult = {
+  cloudName: string;
+  apiKey: string;
+  folder: string;
+  timestamp: number;
+  signature: string;
+  publicId: string;
+  uploadUrl: string;
 };
 
 const DEFAULT_FETCH: FetchLike = (...args) => fetch(...args);
@@ -111,7 +135,8 @@ export async function saveRemoteCardConfig(
   config: CardConfig,
   options: {
     baseUrl?: string;
-    writeToken: string;
+    writeToken?: string;
+    adminSession?: string;
     updatedBy?: string;
     fetchImpl?: FetchLike;
   },
@@ -122,24 +147,26 @@ export async function saveRemoteCardConfig(
     throw new Error('未設定正式後台 API Base URL。');
   }
 
-  const writeToken = options.writeToken.trim();
-  if (!writeToken) {
-    throw new Error('請先輸入 write token。');
+  const writeToken = options.writeToken?.trim() ?? '';
+  const adminSession = options.adminSession?.trim() ?? '';
+  if (!writeToken && !adminSession) {
+    throw new Error('請先完成管理員解鎖。');
   }
 
   const validatedConfig = validateRemoteConfig(config, expectedSlug);
+  const requestBody: SaveCardRequest = {
+    action: 'saveCard',
+    slug: expectedSlug,
+    config: validatedConfig,
+    updatedBy: options.updatedBy?.trim() ?? '',
+    ...(adminSession ? { adminSession } : { writeToken }),
+  };
   const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      action: 'saveCard',
-      slug: expectedSlug,
-      config: validatedConfig,
-      writeToken,
-      updatedBy: options.updatedBy?.trim() ?? '',
-    }),
+    body: JSON.stringify(requestBody),
   });
   const payload = await readCardApiJsonResponse(response);
 
@@ -153,5 +180,166 @@ export async function saveRemoteCardConfig(
     slug: expectedSlug,
     updatedAt: 'updatedAt' in payload ? payload.updatedAt : undefined,
     updatedBy: 'updatedBy' in payload ? payload.updatedBy : undefined,
+  };
+}
+
+export async function createAdminSession(
+  secret: string,
+  options: {
+    baseUrl?: string;
+    fetchImpl?: FetchLike;
+  } = {},
+): Promise<AdminSessionResult> {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
+  if (!baseUrl) {
+    throw new Error('未設定正式後台 API Base URL。');
+  }
+
+  const trimmedSecret = secret.trim();
+  if (!trimmedSecret) {
+    throw new Error('請輸入管理員解鎖密碼。');
+  }
+
+  const requestBody: CreateAdminSessionRequest = {
+    action: 'createAdminSession',
+    secret: trimmedSecret,
+  };
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+  const payload = await readCardApiJsonResponse(response);
+
+  if (!response.ok || payload.ok === false) {
+    throw new Error(getCardApiErrorMessage(payload, `管理員解鎖失敗（${response.status}）。`));
+  }
+
+  if (!('adminSession' in payload) || typeof payload.adminSession !== 'string' || !payload.adminSession) {
+    throw new Error('後台沒有回傳有效的管理員 session。');
+  }
+
+  if (!('expiresAt' in payload) || typeof payload.expiresAt !== 'string' || !payload.expiresAt) {
+    throw new Error('後台沒有回傳 session 到期時間。');
+  }
+
+  return {
+    adminSession: payload.adminSession,
+    expiresAt: payload.expiresAt,
+  };
+}
+
+export async function verifyAdminSession(
+  adminSession: string,
+  options: {
+    baseUrl?: string;
+    fetchImpl?: FetchLike;
+  } = {},
+): Promise<VerifyAdminSessionResult> {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
+  if (!baseUrl) {
+    throw new Error('未設定正式後台 API Base URL。');
+  }
+
+  const trimmedSession = adminSession.trim();
+  if (!trimmedSession) {
+    return { valid: false };
+  }
+
+  const requestBody: VerifyAdminSessionRequest = {
+    action: 'verifyAdminSession',
+    adminSession: trimmedSession,
+  };
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+  const payload = await readCardApiJsonResponse(response);
+
+  if (!response.ok || payload.ok === false) {
+    return { valid: false };
+  }
+
+  return {
+    valid: 'valid' in payload ? payload.valid === true : true,
+    expiresAt: 'expiresAt' in payload && typeof payload.expiresAt === 'string' ? payload.expiresAt : undefined,
+  };
+}
+
+export async function signCloudinaryUpload(
+  slug: string,
+  field: string,
+  adminSession: string,
+  options: {
+    baseUrl?: string;
+    fileName?: string;
+    fetchImpl?: FetchLike;
+  } = {},
+): Promise<UploadSignatureResult> {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
+  if (!baseUrl) {
+    throw new Error('未設定正式後台 API Base URL。');
+  }
+
+  const trimmedSession = adminSession.trim();
+  if (!trimmedSession) {
+    throw new Error('請先完成管理員解鎖。');
+  }
+
+  const requestBody: SignUploadRequest = {
+    action: 'signUpload',
+    adminSession: trimmedSession,
+    slug: getCanonicalCardSlug(slug || defaultCardSlug),
+    field: field.trim(),
+    fileName: options.fileName?.trim() ?? '',
+  };
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+  const payload = await readCardApiJsonResponse(response);
+
+  if (!response.ok || payload.ok === false) {
+    throw new Error(getCardApiErrorMessage(payload, `取得圖片上傳簽章失敗（${response.status}）。`));
+  }
+
+  const requiredKeys = ['cloudName', 'apiKey', 'folder', 'signature', 'publicId', 'uploadUrl'] as const;
+  const payloadRecord = payload as Record<string, unknown>;
+  for (const key of requiredKeys) {
+    if (!(key in payloadRecord) || typeof payloadRecord[key] !== 'string' || !payloadRecord[key]) {
+      throw new Error(`後台缺少圖片上傳欄位：${key}。`);
+    }
+  }
+
+  if (!('timestamp' in payload) || typeof payload.timestamp !== 'number') {
+    throw new Error('後台缺少圖片上傳 timestamp。');
+  }
+
+  const successPayload = payload as {
+    cloudName: string;
+    apiKey: string;
+    folder: string;
+    timestamp: number;
+    signature: string;
+    publicId: string;
+    uploadUrl: string;
+  };
+
+  return {
+    cloudName: successPayload.cloudName,
+    apiKey: successPayload.apiKey,
+    folder: successPayload.folder,
+    timestamp: successPayload.timestamp,
+    signature: successPayload.signature,
+    publicId: successPayload.publicId,
+    uploadUrl: successPayload.uploadUrl,
   };
 }

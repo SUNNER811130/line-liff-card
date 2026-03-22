@@ -377,6 +377,10 @@ button:disabled {
   padding: 22px;
 }
 
+.admin-panel-spacious {
+  margin-top: 18px;
+}
+
 .admin-layout {
   display: grid;
   gap: 18px;
@@ -398,6 +402,11 @@ button:disabled {
 .admin-panel-title {
   font-size: 1.45rem;
   line-height: 1.15;
+}
+
+.admin-unlock-layout {
+  display: grid;
+  gap: 14px;
 }
 
 .admin-field-grid {
@@ -493,6 +502,15 @@ button:disabled {
   background: rgba(248, 250, 252, 0.85);
 }
 
+.admin-info-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(24, 39, 61, 0.08);
+  background: rgba(248, 250, 252, 0.85);
+}
+
 .admin-restore-banner {
   margin-top: 18px;
 }
@@ -560,6 +578,23 @@ button:disabled {
 .admin-validation-list {
   margin: 10px 0 0;
   padding-left: 18px;
+}
+
+.admin-details-summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-details-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
 }
 
 .admin-panel-sticky {

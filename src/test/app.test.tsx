@@ -152,8 +152,8 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('電子名片管理')).toBeInTheDocument();
-      expect(screen.getByText('身分與主視覺')).toBeInTheDocument();
+      expect(screen.getByText('正式電子名片後台')).toBeInTheDocument();
+      expect(screen.getByText('卡片主資訊')).toBeInTheDocument();
       expect(screen.getByDisplayValue('關係護理室')).toBeInTheDocument();
     });
   });

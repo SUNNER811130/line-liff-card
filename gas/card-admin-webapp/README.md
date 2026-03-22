@@ -62,7 +62,13 @@ CARD_ADMIN_WRITE_TOKEN=自行產生的長隨機字串
 5. 匯出：
    - `CARD_RUNTIME_SHEET_ID`
    - `CARD_RUNTIME_SHEET_NAME`
-   - `CARD_ADMIN_WRITE_TOKEN`
+   - `CARD_ADMIN_WRITE_TOKEN` 或 `ADMIN_WRITE_SECRET`
+   - `ADMIN_SESSION_SECRET`
+   - `ADMIN_SESSION_TTL_SECONDS`
+   - `CLOUDINARY_CLOUD_NAME`
+   - `CLOUDINARY_API_KEY`
+   - `CLOUDINARY_API_SECRET`
+   - `CLOUDINARY_UPLOAD_FOLDER`
 6. 執行 [scripts/deploy-gas.sh](/home/usersun/projects/line-liff-card/scripts/deploy-gas.sh)。
 7. 若 `clasp run setupScriptProperties` 或 Web App 部署失敗，通常代表仍需你本人完成 Google 授權、Apps Script API / Execution API 啟用，或第一次在 Google 介面中確認權限。
 8. 複製部署後的 `/exec` URL，填到前端 `VITE_CARD_API_BASE_URL` 或 `/admin/` 的 API Base URL 欄位。
@@ -80,10 +86,13 @@ CARD_ADMIN_WRITE_TOKEN=自行產生的長隨機字串
 
 - `VITE_CARD_API_BASE_URL`
   - 可填 Apps Script Web App `/exec` URL
-- `write token`
+- `/admin/` 解鎖 secret
   - 不要放在前端 env
-  - 由 admin 使用者手動輸入
-  - 若需要，只暫存到 `sessionStorage`
+  - 由 admin 使用者在解鎖 panel 輸入
+  - 前端只保留短期 `adminSession` 到 `sessionStorage`
+- Cloudinary secret
+  - 只放在 Script Properties
+  - 前端只向 GAS 要 signed upload 所需簽章
 
 ## API 範例
 
@@ -128,6 +137,36 @@ GET https://script.google.com/macros/s/DEPLOYMENT_ID/exec?action=getCard&slug=de
 }
 ```
 
+### POST createAdminSession
+
+```json
+{
+  "action": "createAdminSession",
+  "secret": "YOUR_ADMIN_SECRET"
+}
+```
+
+### POST verifyAdminSession
+
+```json
+{
+  "action": "verifyAdminSession",
+  "adminSession": "SIGNED_SESSION_TOKEN"
+}
+```
+
+### POST signUpload
+
+```json
+{
+  "action": "signUpload",
+  "adminSession": "SIGNED_SESSION_TOKEN",
+  "slug": "default",
+  "field": "photo",
+  "fileName": "hero.png"
+}
+```
+
 ### POST initBackend
 
 ```json
@@ -147,6 +186,8 @@ GET https://script.google.com/macros/s/DEPLOYMENT_ID/exec?action=getCard&slug=de
 ## 安全原則
 
 - 真正的 write secret 只放在 Script Properties
+- `saveCard` 可接受 `adminSession`；舊 `writeToken` 只保留相容用途
+- Cloudinary API secret 只放在 Script Properties
 - 前端 repo 不存真正 token
 - 後端會再驗證 `config` 基本 shape，不信任前端直接送入的 JSON
 - 正式頁即使遠端失敗，前端仍會 fallback 到 bundled `defaultCard`

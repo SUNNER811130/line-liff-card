@@ -8,3 +8,5 @@ const legacySlugMap = new Map(cards.flatMap((card) => card.legacySlugs.map((slug
 
 export const getCardBySlug = (slug: string): CardConfig | undefined =>
   cards.find((card) => card.slug === slug) ?? legacySlugMap.get(slug);
+
+export const getBundledCardBySlug = getCardBySlug;

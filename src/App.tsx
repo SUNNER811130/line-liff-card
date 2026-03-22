@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminPage } from './components/AdminPage';
 import { CardPage } from './components/CardPage';
-import { defaultCardSlug, getCardBySlug, primaryCard } from './content/cards';
+import { defaultCardSlug, getCardBySlug } from './content/cards';
+import type { CardConfig } from './content/cards/types';
+import { getBundledPrimaryCard, loadRuntimeCard } from './lib/card-source';
 import { getAppHomePath, getCardPath, resolveAppRoute } from './lib/routes';
 import { applyBasicSeo } from './lib/seo';
 
@@ -32,11 +34,54 @@ function NotFoundPage({ slug }: { slug: string | null }) {
   );
 }
 
+function LoadingPage() {
+  useEffect(() => {
+    applyBasicSeo('載入電子名片中', '正在載入正式電子名片內容。');
+  }, []);
+
+  return (
+    <main className="page-shell">
+      <section className="not-found-panel">
+        <p className="eyebrow">Loading</p>
+        <h1 className="not-found-title">正在載入電子名片</h1>
+        <p className="not-found-copy">系統正在確認正式資料來源，若遠端不可用會自動改用 bundled config。</p>
+      </section>
+    </main>
+  );
+}
+
+function RuntimeCardRoute({ slug }: { slug: string }) {
+  const [config, setConfig] = useState<CardConfig | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setConfig(null);
+
+    void loadRuntimeCard(slug)
+      .then((result) => {
+        if (active) {
+          setConfig(result.config);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setConfig(getBundledPrimaryCard());
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [slug]);
+
+  return config ? <CardPage config={config} /> : <LoadingPage />;
+}
+
 export function App() {
   const route = resolveAppRoute(window.location.pathname);
 
   if (route.kind === 'home') {
-    return <CardPage config={primaryCard} />;
+    return <RuntimeCardRoute slug={defaultCardSlug} />;
   }
 
   if (route.kind === 'admin') {
@@ -45,7 +90,7 @@ export function App() {
 
   if (route.kind === 'card') {
     const card = getCardBySlug(route.slug);
-    return card ? <CardPage config={card} /> : <NotFoundPage slug={route.slug} />;
+    return card ? <RuntimeCardRoute slug={route.slug} /> : <NotFoundPage slug={route.slug} />;
   }
 
   return <NotFoundPage slug={route.slug} />;

@@ -1,55 +1,56 @@
-# Admin MVP
+# Admin Phase 2
 
-## 正式入口
+`/admin/` 已不再只是「本地編輯器 + 預覽器」。
 
-- GitHub Pages: `https://sunner811130.github.io/line-liff-card/admin/`
-- 本機開發: `/admin/`
+現在它同時包含兩層：
 
-這次已補上實體 `admin/index.html`，不只依賴 SPA route restore；因此在 GitHub Pages 直接開 `/admin/` 的風險比之前低。
+## 1. 本地草稿層
 
-## 這版後台能做什麼
+- 自動存到 `localStorage`
+- 可匯入 / 匯出 JSON
+- 可用本機圖片做預覽
+- 允許暫時不合法的欄位內容，錯誤會顯示在 validator 區，而不是直接崩潰
 
-- 編輯電子名片主要內容
-- 編輯前兩顆一般按鈕
-- 保留第三顆固定分享按鈕規則
-- 即時預覽正式卡版型
-- 匯入 / 匯出 JSON
-- 下載 JSON
-- 讀取本機圖片做前端預覽
-- 重設回預設卡內容
-- 將草稿暫存到 `localStorage`
+## 2. 正式後台層
 
-## 分享測試規則
+- 透過 `VITE_CARD_API_BASE_URL` 或手動輸入 API Base URL
+- `載入正式資料`：從遠端資料來源抓正式 `CardConfig`
+- `儲存到正式後台`：把目前草稿寫回遠端正式資料來源
+- write token 由使用者手動輸入
+- 若需要，只暫存到 `sessionStorage`
 
-- admin 預覽中的第三顆按鈕仍保留正式規則
-- 但 admin 預覽不會真的送出分享
-- 正式站第三顆按鈕才會：
-  - 優先嘗試 LINE Flex 電子名片
-  - 必要時 handoff 到 LIFF 再自動分享
-  - 最後才退回一般網址分享 fallback
+## 目前可編輯欄位
 
-## 這版後台不能做什麼
+- 姓名
+- 品牌名稱
+- 職稱
+- 主標
+- 副標
+- 介紹文字
+- 前兩顆一般按鈕
+- `photo.src`
+- `seo.ogImage`
 
-- 不能直接寫回 GitHub repo
-- 不能直接更新 GitHub Pages 已部署內容
-- 不能遠端持久化存檔
-- 不能多人共用同一份資料
-- 不能做權限管理、審核、版本歷史
-- 不能把圖片上傳到正式儲存空間
+## 圖片規則
 
-## 為什麼 GitHub Pages 下不能直接當真正 CMS
+- 本機選圖只更新 preview
+- 沒有正式 upload backend 時，不會假裝圖片已上傳
+- 正式頁與 Flex hero image 最終仍以 URL 欄位為準
 
-GitHub Pages 是靜態檔案託管。瀏覽器中的前端程式：
+## 預覽規則
 
-- 沒有安全的 repo 寫入權限
-- 不能直接修改已部署的原始碼
-- 不能安全持有 GitHub token 或其他敏感憑證
+- admin preview 與正式卡頁共用同一套 `CardPage` / `view-model`
+- 第三顆分享按鈕規則仍保留
+- preview mode 不會真的送出分享
 
-所以目前只能做本地編輯、預覽、匯出 / 匯入，不適合包裝成真正的線上 CMS。
+## 現在不能做的事
 
-## 後續升級方向
+- 不能直接寫 GitHub repo
+- 不能讓前端持有真正 secret
+- 不能自動完成 Google 端部署
 
-1. 保留 `CardConfig schema` 與目前 view-model 結構。
-2. 抽出正式資料來源 adapter。
-3. 將 admin 匯出的 JSON 接到正式資料來源流程。
-4. 若要真正寫回，新增 Apps Script / API / CMS 後端，由後端持有 credentials。
+## 相關檔案
+
+- [src/components/AdminPage.tsx](/home/usersun/projects/line-liff-card/src/components/AdminPage.tsx)
+- [src/lib/card-source.ts](/home/usersun/projects/line-liff-card/src/lib/card-source.ts)
+- [docs/REAL_ADMIN_SETUP.md](/home/usersun/projects/line-liff-card/docs/REAL_ADMIN_SETUP.md)

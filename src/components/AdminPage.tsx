@@ -1,13 +1,27 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { CardPage } from './CardPage';
-import { createDefaultCardDraft, parseCardConfigJson, serializeCardConfig, ADMIN_DRAFT_STORAGE_KEY } from '../content/cards/draft';
+import {
+  createDefaultCardDraft,
+  parseCardConfigJson,
+  serializeCardConfig,
+  ADMIN_DRAFT_STORAGE_KEY,
+} from '../content/cards/draft';
 import type { CardActionConfig, CardConfig } from '../content/cards/types';
 import { assertCardConfig } from '../content/cards/schema';
+import { fetchRemoteCardConfig, getCardApiBaseUrl, saveRemoteCardConfig } from '../lib/card-source';
 import { applyBasicSeo } from '../lib/seo';
 import { validateCardConfig } from '../lib/card-validation';
 
 const adminTitle = '電子名片管理';
-const adminDescription = '編輯電子名片內容、即時預覽，並以 JSON 匯入或匯出設定。';
+const adminDescription = '編輯電子名片內容、區分本地草稿與正式後台資料，並可載入或儲存正式 CardConfig。';
+const ADMIN_TOKEN_SESSION_KEY = 'line-liff-card.admin-write-token';
+
+type StatusTone = 'success' | 'error' | 'info';
+
+type StatusMessage = {
+  tone: StatusTone;
+  text: string;
+};
 
 const uploadImageAsDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -30,8 +44,7 @@ const actionPlaceholderById: Record<string, string> = {
   services: '#serviceUrl',
 };
 
-const normalizeDraft = (draft: CardConfig): CardConfig => {
-  assertCardConfig(draft);
+const coerceDraft = (draft: CardConfig): CardConfig => {
   return {
     ...draft,
     actions: draft.actions.slice(0, 2).map((action, index) => normalizeAction(action, `action-${index + 1}`)),
@@ -42,13 +55,38 @@ const normalizeDraft = (draft: CardConfig): CardConfig => {
   };
 };
 
+const normalizeLoadedDraft = (draft: CardConfig): CardConfig => {
+  assertCardConfig(draft);
+  return coerceDraft(draft);
+};
+
+const formatRemoteSaveMessage = (updatedAt?: string): string =>
+  updatedAt ? `正式後台資料已儲存成功。更新時間：${updatedAt}` : '正式後台資料已儲存成功。';
+
 export function AdminPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<CardConfig>(() => createDefaultCardDraft());
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => getCardApiBaseUrl());
+  const [writeToken, setWriteToken] = useState('');
+  const [rememberTokenInSession, setRememberTokenInSession] = useState(false);
+  const [updatedBy, setUpdatedBy] = useState('');
   const [importText, setImportText] = useState('');
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
-  const [localDraftNote, setLocalDraftNote] = useState<string | null>('此頁僅提供瀏覽器本地暫存，不會直接寫回 GitHub Pages 或 repo。');
+  const [localDraftNote, setLocalDraftNote] = useState<string | null>(
+    '本地草稿會自動存到此瀏覽器 localStorage；只有按「儲存到正式後台」才會更新正式電子名片內容。',
+  );
+  const [remoteStatus, setRemoteStatus] = useState<StatusMessage | null>(
+    getCardApiBaseUrl()
+      ? {
+          tone: 'info',
+          text: '已從 env 讀入正式後台 API Base URL。正式資料可載入或儲存到遠端資料來源。',
+        }
+      : {
+          tone: 'info',
+          text: '尚未設定正式後台 API Base URL；目前仍可編輯本地草稿與預覽，但不能讀寫正式資料。',
+        },
+  );
 
   useEffect(() => {
     applyBasicSeo(adminTitle, adminDescription);
@@ -56,29 +94,41 @@ export function AdminPage() {
 
   useEffect(() => {
     const savedDraft = window.localStorage.getItem(ADMIN_DRAFT_STORAGE_KEY);
-    if (!savedDraft) {
-      return;
+    if (savedDraft) {
+      const parsed = parseCardConfigJson(savedDraft);
+      if (parsed.ok) {
+        setDraft(normalizeLoadedDraft(parsed.data));
+        setLocalDraftNote('已載入此瀏覽器先前暫存的本地草稿。這份資料不一定等於正式後台內容。');
+      } else {
+        window.localStorage.removeItem(ADMIN_DRAFT_STORAGE_KEY);
+      }
     }
 
-    const parsed = parseCardConfigJson(savedDraft);
-    if (!parsed.ok) {
-      window.localStorage.removeItem(ADMIN_DRAFT_STORAGE_KEY);
-      return;
+    const sessionToken = window.sessionStorage.getItem(ADMIN_TOKEN_SESSION_KEY);
+    if (sessionToken) {
+      setWriteToken(sessionToken);
+      setRememberTokenInSession(true);
     }
-
-    setDraft(normalizeDraft(parsed.data));
-    setLocalDraftNote('已載入此瀏覽器先前暫存的草稿。這不是正式後台存檔。');
   }, []);
 
   useEffect(() => {
     window.localStorage.setItem(ADMIN_DRAFT_STORAGE_KEY, serializeCardConfig(draft));
   }, [draft]);
 
+  useEffect(() => {
+    if (rememberTokenInSession && writeToken.trim()) {
+      window.sessionStorage.setItem(ADMIN_TOKEN_SESSION_KEY, writeToken);
+      return;
+    }
+
+    window.sessionStorage.removeItem(ADMIN_TOKEN_SESSION_KEY);
+  }, [rememberTokenInSession, writeToken]);
+
   const validationErrors = useMemo(() => validateCardConfig(draft), [draft]);
   const exportJson = useMemo(() => serializeCardConfig(draft), [draft]);
 
   const patchDraft = (updater: (current: CardConfig) => CardConfig) => {
-    setDraft((current) => normalizeDraft(updater(current)));
+    setDraft((current) => coerceDraft(updater(current)));
   };
 
   const updateAction = (index: number, updater: (action: CardActionConfig) => CardActionConfig) => {
@@ -99,14 +149,14 @@ export function AdminPage() {
       return;
     }
 
-    setDraft(normalizeDraft(parsed.data));
-    setImportFeedback('JSON 已套用到目前編輯狀態。若要保留，請自行匯出保存。');
+    setDraft(normalizeLoadedDraft(parsed.data));
+    setImportFeedback('JSON 已套用到目前本地草稿。若要更新正式資料，仍需另外儲存到正式後台。');
   };
 
   const handleExport = async () => {
     try {
       await navigator.clipboard.writeText(exportJson);
-      setExportFeedback('目前設定 JSON 已複製到剪貼簿。');
+      setExportFeedback('目前本地草稿 JSON 已複製到剪貼簿。');
     } catch {
       setExportFeedback('目前瀏覽器不支援直接複製，請使用下方 JSON 區塊手動保存。');
     }
@@ -116,8 +166,9 @@ export function AdminPage() {
     const nextDraft = createDefaultCardDraft();
     setDraft(nextDraft);
     setImportText('');
-    setImportFeedback('已重設回預設內容。');
+    setImportFeedback('已重設回 bundled 預設內容，並覆蓋目前本地草稿。');
     setExportFeedback(null);
+    setLocalDraftNote('本地草稿已重設回 bundled 預設內容。這不會修改正式後台資料。');
     window.localStorage.setItem(ADMIN_DRAFT_STORAGE_KEY, serializeCardConfig(nextDraft));
   };
 
@@ -135,8 +186,8 @@ export function AdminPage() {
       return;
     }
 
-    setDraft(normalizeDraft(parsed.data));
-    setImportFeedback('已從 JSON 檔案匯入並套用。');
+    setDraft(normalizeLoadedDraft(parsed.data));
+    setImportFeedback('已從 JSON 檔案匯入並套用到本地草稿。');
     event.target.value = '';
   };
 
@@ -156,11 +207,92 @@ export function AdminPage() {
           alt: file.name || current.photo.alt,
         },
       }));
-      setLocalDraftNote('已套用本機圖片預覽。圖片只存在此瀏覽器草稿，未上傳到任何伺服器。');
+      setLocalDraftNote('已套用本機圖片預覽。這只是本地草稿預覽，不代表圖片已上傳；正式生效仍以圖片 URL 欄位為準。');
     } catch (error) {
       setLocalDraftNote(error instanceof Error ? error.message : '圖片預覽失敗。');
     } finally {
       event.target.value = '';
+    }
+  };
+
+  const handleLoadRemote = async () => {
+    if (!apiBaseUrl.trim()) {
+      setRemoteStatus({
+        tone: 'error',
+        text: '請先輸入正式後台 API Base URL，才能載入正式資料。',
+      });
+      return;
+    }
+
+    setRemoteStatus({
+      tone: 'info',
+      text: '正在載入正式後台資料...',
+    });
+
+    try {
+      const remoteConfig = await fetchRemoteCardConfig(draft.slug, {
+        baseUrl: apiBaseUrl,
+      });
+      setDraft(normalizeLoadedDraft(remoteConfig));
+      setLocalDraftNote('已用正式後台資料覆蓋目前本地草稿；若再修改，仍要按儲存才會更新正式內容。');
+      setRemoteStatus({
+        tone: 'success',
+        text: `已載入 slug「${remoteConfig.slug}」的正式後台資料。`,
+      });
+    } catch (error) {
+      setRemoteStatus({
+        tone: 'error',
+        text: error instanceof Error ? error.message : '載入正式後台資料失敗。',
+      });
+    }
+  };
+
+  const handleSaveRemote = async () => {
+    if (!apiBaseUrl.trim()) {
+      setRemoteStatus({
+        tone: 'error',
+        text: '請先輸入正式後台 API Base URL，才能儲存正式資料。',
+      });
+      return;
+    }
+
+    if (!writeToken.trim()) {
+      setRemoteStatus({
+        tone: 'error',
+        text: '請先輸入 write token，才能儲存正式資料。',
+      });
+      return;
+    }
+
+    if (validationErrors.length > 0) {
+      setRemoteStatus({
+        tone: 'error',
+        text: '目前本地草稿仍有欄位錯誤，請先修正後再儲存到正式後台。',
+      });
+      return;
+    }
+
+    setRemoteStatus({
+      tone: 'info',
+      text: '正在儲存到正式後台...',
+    });
+
+    try {
+      const result = await saveRemoteCardConfig(draft.slug, draft, {
+        baseUrl: apiBaseUrl,
+        writeToken,
+        updatedBy,
+      });
+      setDraft(normalizeLoadedDraft(result.config));
+      setRemoteStatus({
+        tone: 'success',
+        text: formatRemoteSaveMessage(result.updatedAt),
+      });
+    } catch (error) {
+      setRemoteStatus({
+        tone: 'error',
+        text: error instanceof Error ? error.message : '儲存正式後台資料失敗。',
+      });
     }
   };
 
@@ -170,16 +302,70 @@ export function AdminPage() {
         <div>
           <p className="eyebrow">Card Admin</p>
           <h1 className="admin-title">電子名片管理</h1>
-          <p className="admin-copy">編輯內容、確認預覽、匯出 JSON 保存。這一版是管理頁 MVP，不是正式持久化 CMS。</p>
+          <p className="admin-copy">這一版已分成兩層：本地草稿用來編輯與預覽，正式後台資料則透過 API + token 讀寫遠端資料來源。</p>
         </div>
         <div className="admin-note-card">
-          <p className="section-label">使用說明</p>
+          <p className="section-label">本地草稿</p>
           <p className="support-copy">{localDraftNote}</p>
         </div>
       </section>
 
       <section className="admin-layout">
         <div className="admin-form-column">
+          <section className="admin-panel">
+            <div className="admin-section-heading">
+              <p className="section-label">正式後台</p>
+              <h2 className="admin-panel-title">Remote Data Source</h2>
+            </div>
+            <div className="admin-field-grid">
+              <label className="admin-field admin-field-full">
+                <span>API Base URL</span>
+                <input
+                  value={apiBaseUrl}
+                  onChange={(event) => setApiBaseUrl(event.target.value)}
+                  placeholder="https://script.google.com/macros/s/DEPLOYMENT_ID/exec"
+                />
+              </label>
+              <label className="admin-field">
+                <span>Write Token</span>
+                <input
+                  type="password"
+                  value={writeToken}
+                  onChange={(event) => setWriteToken(event.target.value)}
+                  placeholder="由 Apps Script Script Properties 管理"
+                />
+              </label>
+              <label className="admin-field">
+                <span>Updated By</span>
+                <input
+                  value={updatedBy}
+                  onChange={(event) => setUpdatedBy(event.target.value)}
+                  placeholder="例如 admin@sunner.tw"
+                />
+              </label>
+              <label className="admin-toggle">
+                <input
+                  type="checkbox"
+                  checked={rememberTokenInSession}
+                  onChange={(event) => setRememberTokenInSession(event.target.checked)}
+                />
+                <span>只在 sessionStorage 暫存 token</span>
+              </label>
+              <p className="support-copy admin-field-hint">
+                前端不會內建真正 write secret。若勾選，上述 token 只會暫存於目前分頁 sessionStorage。
+              </p>
+            </div>
+            <div className="admin-inline-actions">
+              <button type="button" className="action-button action-button-secondary" onClick={handleLoadRemote}>
+                載入正式資料
+              </button>
+              <button type="button" className="action-button action-button-primary" onClick={handleSaveRemote}>
+                儲存到正式後台
+              </button>
+            </div>
+            {remoteStatus ? <p className={`feedback-message ${remoteStatus.tone === 'error' ? 'is-error' : remoteStatus.tone === 'success' ? 'is-success' : ''}`}>{remoteStatus.text}</p> : null}
+          </section>
+
           <section className="admin-panel">
             <div className="admin-section-heading">
               <p className="section-label">基本資料</p>
@@ -198,8 +384,8 @@ export function AdminPage() {
                 <span>品牌名稱</span>
                 <input value={draft.content.brandName} onChange={(event) => patchDraft((current) => ({ ...current, content: { ...current.content, brandName: event.target.value } }))} />
               </label>
-              <label className="admin-field">
-                <span>照片網址</span>
+              <label className="admin-field admin-field-full">
+                <span>正式圖片 URL</span>
                 <input value={draft.photo.src} onChange={(event) => patchDraft((current) => ({ ...current, photo: { ...current.photo, src: event.target.value } }))} />
               </label>
               <label className="admin-field">
@@ -210,6 +396,10 @@ export function AdminPage() {
                 <span>照片點擊連結</span>
                 <input value={draft.photo.link ?? ''} onChange={(event) => patchDraft((current) => ({ ...current, photo: { ...current.photo, link: event.target.value } }))} />
               </label>
+              <label className="admin-field admin-field-full">
+                <span>OG Image URL</span>
+                <input value={draft.seo.ogImage} onChange={(event) => patchDraft((current) => ({ ...current, seo: { ...current.seo, ogImage: event.target.value } }))} />
+              </label>
             </div>
             <div className="admin-inline-actions">
               <button type="button" className="action-button action-button-secondary" onClick={() => fileInputRef.current?.click()}>
@@ -217,6 +407,7 @@ export function AdminPage() {
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={handleImageSelect} />
             </div>
+            <p className="support-copy admin-field-hint">本機選圖只更新預覽中的本地草稿；真正正式頁與 Flex hero image 仍以「正式圖片 URL」和 `OG Image URL` 為準。</p>
           </section>
 
           <section className="admin-panel">
@@ -237,36 +428,13 @@ export function AdminPage() {
                 <span>介紹文字</span>
                 <textarea rows={5} value={draft.content.intro} onChange={(event) => patchDraft((current) => ({ ...current, content: { ...current.content, intro: event.target.value } }))} />
               </label>
-              <label className="admin-field admin-field-full">
-                <span>亮點標題</span>
-                <input value={draft.content.highlightsTitle} onChange={(event) => patchDraft((current) => ({ ...current, content: { ...current.content, highlightsTitle: event.target.value } }))} />
-              </label>
-              {draft.content.highlights.map((item, index) => (
-                <label key={`highlight-${index}`} className="admin-field admin-field-full">
-                  <span>{`亮點 ${index + 1}`}</span>
-                  <input
-                    value={item}
-                    onChange={(event) =>
-                      patchDraft((current) => ({
-                        ...current,
-                        content: {
-                          ...current.content,
-                          highlights: current.content.highlights.map((highlight, highlightIndex) =>
-                            highlightIndex === index ? event.target.value : highlight,
-                          ),
-                        },
-                      }))
-                    }
-                  />
-                </label>
-              ))}
             </div>
           </section>
 
           <section className="admin-panel">
             <div className="admin-section-heading">
               <p className="section-label">按鈕設定</p>
-              <h2 className="admin-panel-title">一般按鈕與分享規則</h2>
+              <h2 className="admin-panel-title">前兩顆一般按鈕與分享規則</h2>
             </div>
             <div className="admin-field-grid">
               {draft.actions.map((action, index) => (
@@ -312,41 +480,8 @@ export function AdminPage() {
                 />
               </label>
               <p className="support-copy admin-field-hint">
-                前兩顆是可編輯的一般按鈕，第三顆固定是系統分享按鈕；這裡只能調整文案，不能移除分享功能。
+                前兩顆是可編輯的一般按鈕，第三顆固定是系統分享按鈕；分享流程與 legacy slug canonicalization 不會因 admin 編輯而被破壞。
               </p>
-            </div>
-          </section>
-
-          <section className="admin-panel">
-            <div className="admin-section-heading">
-              <p className="section-label">版型主題</p>
-              <h2 className="admin-panel-title">模組與外觀</h2>
-            </div>
-            <div className="admin-field-grid">
-              <label className="admin-field">
-                <span>主題</span>
-                <select value={draft.appearance.theme} onChange={(event) => patchDraft((current) => ({ ...current, appearance: { ...current.appearance, theme: event.target.value as CardConfig['appearance']['theme'] } }))}>
-                  <option value="executive">Executive</option>
-                </select>
-              </label>
-              <label className="admin-field">
-                <span>版型</span>
-                <select value={draft.appearance.layout} onChange={(event) => patchDraft((current) => ({ ...current, appearance: { ...current.appearance, layout: event.target.value as CardConfig['appearance']['layout'] } }))}>
-                  <option value="profile-right">Profile Right</option>
-                </select>
-              </label>
-              <label className="admin-toggle">
-                <input type="checkbox" checked={draft.modules.showHighlights} onChange={(event) => patchDraft((current) => ({ ...current, modules: { ...current.modules, showHighlights: event.target.checked } }))} />
-                <span>顯示專業簡介</span>
-              </label>
-              <label className="admin-toggle">
-                <input type="checkbox" checked={draft.modules.showSharePanel} onChange={(event) => patchDraft((current) => ({ ...current, modules: { ...current.modules, showSharePanel: event.target.checked } }))} />
-                <span>顯示分享說明區</span>
-              </label>
-              <label className="admin-toggle">
-                <input type="checkbox" checked={draft.modules.showQrCode} onChange={(event) => patchDraft((current) => ({ ...current, modules: { ...current.modules, showQrCode: event.target.checked } }))} />
-                <span>顯示 QR Code</span>
-              </label>
             </div>
           </section>
 
@@ -359,15 +494,19 @@ export function AdminPage() {
               <button type="button" className="action-button action-button-primary" onClick={handleExport}>
                 複製目前 JSON
               </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => {
-                const blob = new Blob([exportJson], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `${draft.slug || 'card-config'}.json`;
-                link.click();
-                URL.revokeObjectURL(url);
-              }}>
+              <button
+                type="button"
+                className="action-button action-button-secondary"
+                onClick={() => {
+                  const blob = new Blob([exportJson], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = `${draft.slug || 'card-config'}.json`;
+                  link.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
                 下載 JSON
               </button>
               <button type="button" className="action-button action-button-secondary" onClick={handleReset}>
@@ -381,7 +520,7 @@ export function AdminPage() {
             {exportFeedback ? <p className="feedback-message is-success">{exportFeedback}</p> : null}
             {importFeedback ? <p className={`feedback-message ${importFeedback.includes('已') ? 'is-success' : 'is-error'}`}>{importFeedback}</p> : null}
             <label className="admin-field admin-field-full">
-              <span>貼上 JSON 後套用</span>
+              <span>貼上 JSON 後套用到本地草稿</span>
               <textarea rows={12} value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="將匯出的 card config JSON 貼在這裡" />
             </label>
             <div className="admin-inline-actions">
@@ -390,7 +529,7 @@ export function AdminPage() {
               </button>
             </div>
             <label className="admin-field admin-field-full">
-              <span>目前可保存設定</span>
+              <span>目前本地草稿 JSON</span>
               <textarea rows={12} value={exportJson} readOnly />
             </label>
           </section>
@@ -412,7 +551,7 @@ export function AdminPage() {
                 </ul>
               </div>
             ) : (
-              <p className="support-copy">目前欄位格式可用，匯出的 JSON 可作為後續正式設定來源。</p>
+              <p className="support-copy">目前本地草稿可通過 schema / validator，預覽與正式卡頁共用同一套 CardPage / view-model。</p>
             )}
           </section>
           <CardPage config={draft} previewMode embedded />

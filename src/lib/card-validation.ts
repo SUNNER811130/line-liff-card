@@ -9,6 +9,11 @@ const isHttpUrl = (value: string): boolean => {
   }
 };
 
+const isRelativeAssetPath = (value: string): boolean => {
+  const trimmed = value.trim();
+  return Boolean(trimmed) && !trimmed.startsWith('//') && !/^[a-z]+:/i.test(trimmed) && !trimmed.startsWith('#');
+};
+
 const isAllowedLink = (value: string): boolean => {
   const trimmed = value.trim();
 
@@ -64,12 +69,18 @@ export const validateCardConfig = (config: CardConfig): string[] => {
 
   if (!config.photo.src.trim()) {
     errors.push('照片網址不能為空。');
-  } else if (!config.photo.src.startsWith('data:') && !config.photo.src.startsWith('/') && !isHttpUrl(config.photo.src)) {
+  } else if (!config.photo.src.startsWith('data:') && !config.photo.src.startsWith('/') && !isHttpUrl(config.photo.src) && !isRelativeAssetPath(config.photo.src)) {
     errors.push('照片網址格式不正確。');
   }
 
   if (config.photo.link?.trim() && !isAllowedLink(config.photo.link)) {
     errors.push('照片連結格式不正確。');
+  }
+
+  if (!config.seo.ogImage.trim()) {
+    errors.push('OG Image URL 不能為空。');
+  } else if (!config.seo.ogImage.startsWith('/') && !isHttpUrl(config.seo.ogImage) && !isRelativeAssetPath(config.seo.ogImage)) {
+    errors.push('OG Image URL 格式不正確。');
   }
 
   config.actions.forEach((action, index) => {

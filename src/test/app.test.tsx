@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { App } from '../App';
+import { cloneCardConfig } from '../content/cards/draft';
+import { defaultCard } from '../content/cards/default';
 import { __resetLiffForTests } from '../lib/liff';
 import * as liff from '../lib/liff';
 import * as runtime from '../lib/runtime';
@@ -66,17 +68,21 @@ vi.mock('@line/liff/permanent-link', () => ({
 
 describe('App', () => {
   let navigateSpy: ReturnType<typeof vi.spyOn>;
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     window.history.replaceState({}, '', '/');
     window.sessionStorage.clear();
     vi.stubEnv('VITE_LIFF_ID', '');
     vi.stubEnv('VITE_SITE_URL', '');
+    vi.stubEnv('VITE_CARD_API_BASE_URL', '');
     liffCoreMock.use.mockReturnThis();
     liffCoreMock.init.mockResolvedValue(undefined);
     liffCoreMock.isInClient.mockReturnValue(false);
     liffCoreMock.isLoggedIn.mockReturnValue(true);
     liffCoreMock.isApiAvailable.mockReturnValue(false);
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
     navigateSpy = vi.spyOn(runtime, 'navigateToUrl').mockImplementation(() => undefined);
   });
 
@@ -86,6 +92,48 @@ describe('App', () => {
     vi.unstubAllEnvs();
     vi.clearAllMocks();
     navigateSpy.mockRestore();
+  });
+
+  it('renders remote config when runtime adapter fetch succeeds', async () => {
+    const remoteConfig = cloneCardConfig(defaultCard);
+    remoteConfig.content.fullName = '遠端正式姓名';
+    remoteConfig.content.brandName = '遠端品牌';
+    remoteConfig.photo.src = 'https://cdn.example.test/runtime-hero.jpg';
+    remoteConfig.seo.ogImage = 'https://cdn.example.test/runtime-og.jpg';
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          config: remoteConfig,
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('遠端品牌')).toBeInTheDocument();
+      expect(screen.getByText('遠端正式姓名')).toBeInTheDocument();
+    });
+  });
+
+  it('falls back to bundled config when runtime adapter fetch fails', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    fetchMock.mockRejectedValue(new Error('backend unavailable'));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('關係護理室')).toBeInTheDocument();
+      expect(screen.getByText('蘇彥宇 Sunner')).toBeInTheDocument();
+    });
   });
 
   it('renders the formal card on the home page', async () => {
@@ -178,6 +226,69 @@ describe('App', () => {
       expect(liffCoreMock.shareTargetPicker).toHaveBeenCalled();
       expect(screen.getByText('已開啟 LINE 分享視窗。')).toBeInTheDocument();
     });
+  });
+
+  it('shares the currently loaded runtime config instead of the bundled default', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/`);
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    liffCoreMock.isInClient.mockReturnValue(true);
+    liffCoreMock.isLoggedIn.mockReturnValue(true);
+    liffCoreMock.isApiAvailable.mockReturnValue(true);
+    liffCoreMock.shareTargetPicker.mockResolvedValue(true);
+    const remoteConfig = cloneCardConfig(defaultCard);
+    remoteConfig.content.fullName = '遠端分享姓名';
+    remoteConfig.actions[0].label = '遠端第一顆按鈕';
+    remoteConfig.photo.src = 'https://cdn.example.test/remote-share-hero.jpg';
+    remoteConfig.seo.ogImage = 'https://cdn.example.test/remote-share-og.jpg';
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          config: remoteConfig,
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      ),
+    );
+    window.history.replaceState({}, '', '/card/default/');
+
+    render(<App />);
+
+    const user = userEvent.setup();
+    await waitFor(() => {
+      expect(screen.getByText('遠端分享姓名')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '分享此電子名片給 LINE 好友' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '分享此電子名片給 LINE 好友' }));
+
+    await waitFor(() => {
+      expect(liffCoreMock.shareTargetPicker).toHaveBeenCalled();
+    });
+
+    expect(liffCoreMock.shareTargetPicker).toHaveBeenCalledWith([
+      expect.objectContaining({
+        contents: expect.objectContaining({
+          hero: expect.objectContaining({
+            url: 'https://cdn.example.test/remote-share-hero.jpg',
+          }),
+          footer: expect.objectContaining({
+            contents: expect.arrayContaining([
+              expect.objectContaining({
+                action: expect.objectContaining({
+                  label: '遠端第一顆按鈕',
+                }),
+              }),
+            ]),
+          }),
+        }),
+      }),
+    ]);
   });
 
   it('redirects to LIFF share intent when inside LINE but shareTargetPicker is unavailable', async () => {

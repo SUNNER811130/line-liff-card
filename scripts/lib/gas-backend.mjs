@@ -3,6 +3,7 @@ export const CARD_API_ACTIONS = {
   saveCard: 'saveCard',
   initBackend: 'initBackend',
   health: 'health',
+  debugRuntimeAccess: 'debugRuntimeAccess',
 };
 
 export const buildExecUrl = (deploymentId) => `https://script.google.com/macros/s/${deploymentId}/exec`;
@@ -30,6 +31,12 @@ export const buildGetCardUrl = (baseUrl, slug = 'default') => {
   const url = new URL(baseUrl);
   url.searchParams.set('action', CARD_API_ACTIONS.getCard);
   url.searchParams.set('slug', slug);
+  return url.toString();
+};
+
+export const buildDebugRuntimeAccessUrl = (baseUrl) => {
+  const url = new URL(baseUrl);
+  url.searchParams.set('action', CARD_API_ACTIONS.debugRuntimeAccess);
   return url.toString();
 };
 

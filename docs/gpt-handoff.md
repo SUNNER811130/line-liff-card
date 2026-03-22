@@ -42,7 +42,7 @@
 
 正式 backend 只承認這一個 exec URL：
 
-- `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+- `https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec`
 
 不要把 library URL 當成 backend API；若看到舊 deployment，只能當歷史資訊。
 
@@ -81,6 +81,7 @@ scaffold：
   - `action=initBackend`
   - `setupScriptProperties()`
   - `debugOpenSheet()`
+  - `action=debugRuntimeAccess`
 
 不要描述成 runtime backend 已完全打通。repo 端 wiring 已完成，但 live backend 仍未通。
 
@@ -90,17 +91,28 @@ scaffold：
   - `1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
 - `clasp show-authorized-user`：
   - `sunner811130@gmail.com`
-- 正式 exec URL：
-  - `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+- 已完成 `clasp push --force`
+- 已把既有正式 deployment 更新到 `AKfycbz... @11`
+- 已在同一個 scriptId 下新建乾淨 deployment：
+  - `AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA @11`
+- 唯一正式 exec URL：
+  - `https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec`
 - `.env.local` / `.env.production` 都已指向同一個正式 exec URL，這部分已對齊
 - shell env 也已對齊：
   - `CARD_RUNTIME_SHEET_ID=1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
   - `CARD_RUNTIME_SHEET_NAME=cards_runtime`
   - `CARD_ADMIN_WRITE_TOKEN` 已存在
 - 已把 `Code.gs` 的 `health` 改成真正檢查 Sheet 可存取性，避免再出現「health 綠燈、getCard 才爆」的假健康狀態
-- user 已手動完成 `debugOpenSheet()` 授權，且已手動更新 Web App deployment
+- 已新增 `debugRuntimeAccess`，live 可直接回報 scriptId / serviceUrl / configured sheetId / sheetAccessible
 - 但 2026-03-22 live `health` 仍直接回：
   - `ok: false`
+  - `sheetAccessible: false`
+  - `error: Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
+- live `debugRuntimeAccess`：
+  - `ok: true`
+  - `scriptId: 1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
+  - `serviceUrl` 就是新的正式 exec URL
+  - `sheetIdSanitized: false`
   - `sheetAccessible: false`
   - `error: Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 - live `getCard(default)`：
@@ -109,15 +121,19 @@ scaffold：
   - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 - live `saveCard(default)`：
   - `Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
-- `debugOpenSheet()` 仍保留在正式 GAS，可用來驗證目標 Sheet 是否真的可由此專案打開
+- `debugOpenSheet()` 仍保留在正式 GAS，可用來驗證 editor 手動執行時是否能打開目標 Sheet
 - manifest 已顯式補上最小必要 scopes：
   - `https://www.googleapis.com/auth/spreadsheets`
   - `https://www.googleapis.com/auth/drive.readonly`
-- 這表示目前真正問題仍收斂成 Google 端拒絕把 `1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg` 當成可由此正式 GAS 開啟的 Spreadsheet；不是 repo 綁錯 script、不是舊 deployment、也不是前端 URL 指錯
+- 新舊兩個 live deployment 都回同樣錯誤，且 `debugRuntimeAccess` 已證明 live 正在吃最新 code；因此 stale deployment、舊版本、隱藏字元、前端 env、library URL 都已排除
+- 目前真正剩餘問題只收斂到 Google live Web App execute-as / deployment runtime access
 - `/admin/` 真正 load/save 目前都還不能 live 成功：
   - load 受阻於 `getCard(default)` 同一錯誤
   - save 受阻於 `saveCard(default)` 同一錯誤
 - 前台 remote config / share Flex 雖然 wiring 都吃同一份 runtime config，但在 live backend 未通前，實際仍只會 fallback bundled config
-- 下個接手者不要再重新建立 GAS 專案；請直接在現有正式 Apps Script 專案內確認：
-  - 這個 ID 是否真的是 Google 試算表 ID
-  - 同一帳號在 Apps Script UI 內再次執行 `debugOpenSheet()`，確認 `DriveApp.getFileById()` 與 `SpreadsheetApp.openById()` 的實際結果
+- 下個接手者不要再重新建立 GAS 專案；現在只剩一個 Google UI 手動步驟：
+  - 在同一支正式 standalone GAS 的 Apps Script UI 內，對新的 deployment `AKfycbx7...` 進入 Manage deployments
+  - 確認它是 `Web app`
+  - 確認 `Execute as: Me (sunner811130@gmail.com)`
+  - 確認 `Who has access: Anyone`
+  - 按一次重新部署 / 更新，若跳 deployment runtime 授權同意畫面，就完成那次同意

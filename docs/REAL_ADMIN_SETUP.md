@@ -96,7 +96,7 @@ npm run gas:deploy
 
 這支腳本會盡量自動完成：
 
-1. `clasp push`
+1. `clasp push --force`
 2. `clasp run setupScriptProperties`
 3. `clasp version`
 4. `clasp deploy`
@@ -110,7 +110,7 @@ npm run gas:deploy
 正式環境可設定：
 
 ```bash
-VITE_CARD_API_BASE_URL=https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec
+VITE_CARD_API_BASE_URL=https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec
 ```
 
 或直接在 `/admin/` 的 `API Base URL` 欄位輸入。
@@ -123,7 +123,7 @@ repo 也提供：
 
 用來印出可貼進 `.env.local` / CI secrets 的內容。
 
-目前 repo 內 `.env.local` / `.env.production` 已都寫成上面這個正式 exec URL。
+目前 repo 內 `.env.local` / `.env.production` 已都寫成上面這個新的正式 exec URL。
 
 ## 7. 使用 `/admin/`
 
@@ -214,6 +214,8 @@ npm run gas:deploy
 
 - `clasp is not logged in`
   - 先跑 `npm run gas:login`
+- `Skipping push`
+  - `scripts/deploy-gas.sh` 現在已改成 `clasp push --force`，避免出現 version 已更新但 code 沒真正進 deployment 的狀況
 - `Failed to run setupScriptProperties`
   - 通常是 Apps Script API / Execution API 未啟用，或你還沒完成 Google 授權
 - `Invalid write token`
@@ -236,7 +238,7 @@ repo 現在已提供 scaffold、前端 adapter、CLI 與文件，但不會假裝
 - 正式 standalone GAS `scriptId`
   - `1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
 - 正式 Web App exec URL
-  - `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+  - `https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec`
 - 正式 runtime sheet
   - `SHEET_ID=1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
   - `SHEET_NAME=cards_runtime`
@@ -247,8 +249,22 @@ repo 現在已提供 scaffold、前端 adapter、CLI 與文件，但不會假裝
 - manifest 最小必要 scopes
   - `https://www.googleapis.com/auth/spreadsheets`
   - `https://www.googleapis.com/auth/drive.readonly`
-- user 已在正確正式 GAS 內手動完成 `debugOpenSheet()` 授權，且已手動更新 Web App deployment
+- `Code.gs` 現在另有 live debug endpoint：
+  - `action=debugRuntimeAccess`
+  - 只回傳 configured sheet id / sheet name / sheetAccessible / spreadsheetName / runningInLiveWebApp / scriptId / serviceUrl
+  - 不回傳 write token
+- 已完成：
+  - `clasp push --force`
+  - version `11`
+  - 更新舊正式 deployment `AKfycbz... @11`
+  - 新建乾淨 deployment `AKfycbx7... @11`
 - 但 2026-03-22 重新驗證 live backend，結果仍是：
+  - `GET /exec?action=debugRuntimeAccess`
+    - `ok: true`
+    - `scriptId: 1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
+    - `serviceUrl` 已對應新的正式 exec URL
+    - `sheetAccessible: false`
+    - `error: Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
   - `GET /exec?action=health`
     - `ok: false`
     - `sheetAccessible: false`
@@ -263,6 +279,12 @@ repo 現在已提供 scaffold、前端 adapter、CLI 與文件，但不會假裝
 - 不要再建立新的 GAS 專案
 - 不要切到 Sheet bound script
 - 目前唯一正式後端仍是 `.clasp.json` 綁定的這支 standalone GAS
+- 目前唯一正式 backend exec URL 已收斂成新的乾淨 deployment：
+  - `https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec`
+- library URL 不是前台 API，必須忽略
 - 目前唯一正式資料來源目標仍是 `LIFF Card Runtime / cards_runtime`
 - repo 端的前台、`/admin/`、share/Flex wiring 已完成
+- 新舊 live deployment 都回相同錯誤，表示 stale deployment / 舊 code 已排除
 - 但在 `health` 轉綠之前，`/admin/` 真實 load/save、front page remote config、與新分享出去的 Flex live 驗證都還不能算打通
+- 若還有唯一需要人工處理的步驟，現在只剩：
+  - 在 Apps Script UI 的 Manage deployments 內，針對新的正式 deployment `AKfycbx7...` 明確確認 `Web app`、`Execute as: Me`、`Who has access: Anyone`，然後按一次更新並完成那次 deployment runtime 授權同意畫面

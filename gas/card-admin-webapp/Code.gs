@@ -2,6 +2,7 @@ var ACTION_GET_CARD = 'getCard';
 var ACTION_SAVE_CARD = 'saveCard';
 var ACTION_INIT_BACKEND = 'initBackend';
 var ACTION_HEALTH = 'health';
+var ACTION_DEBUG_RUNTIME_ACCESS = 'debugRuntimeAccess';
 var DEFAULT_SHEET_NAME = 'cards_runtime';
 var DEFAULT_RUNTIME_SLUG = 'default';
 var REQUIRED_COLUMNS = ['slug', 'config_json', 'updated_at', 'updated_by'];
@@ -23,6 +24,10 @@ function doGet(e) {
         action: action,
         status: status,
       });
+    }
+
+    if (action === ACTION_DEBUG_RUNTIME_ACCESS) {
+      return jsonResponse_(true, buildDebugRuntimeAccessPayload_());
     }
 
     if (action !== ACTION_GET_CARD) {
@@ -154,12 +159,12 @@ function saveCardRow_(slug, configJson, updatedAt, updatedBy) {
 }
 
 function getRuntimeSheet_() {
-  var sheetId = getScriptProperty_('CARD_RUNTIME_SHEET_ID');
+  var sheetId = sanitizeSheetId_(getScriptProperty_('CARD_RUNTIME_SHEET_ID'));
   if (!sheetId) {
     throw new Error('CARD_RUNTIME_SHEET_ID is not configured.');
   }
 
-  var sheetName = getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME;
+  var sheetName = sanitizeSheetName_(getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME);
   var sheet = openRuntimeSheetById_(sheetId, sheetName);
 
   ensureHeaders_(sheet);
@@ -167,11 +172,13 @@ function getRuntimeSheet_() {
 }
 
 function openRuntimeSheetById_(sheetId, sheetName) {
-  var spreadsheet = SpreadsheetApp.openById(sheetId);
-  var sheet = spreadsheet.getSheetByName(sheetName);
+  var cleanSheetId = sanitizeSheetId_(sheetId);
+  var normalizedSheetName = sanitizeSheetName_(sheetName);
+  var spreadsheet = SpreadsheetApp.openById(cleanSheetId);
+  var sheet = spreadsheet.getSheetByName(normalizedSheetName);
 
   if (!sheet) {
-    throw new Error('Sheet "' + sheetName + '" was not found.');
+    throw new Error('Sheet "' + normalizedSheetName + '" was not found.');
   }
 
   return sheet;
@@ -179,8 +186,8 @@ function openRuntimeSheetById_(sheetId, sheetName) {
 
 function setupScriptProperties(input) {
   var payload = input || {};
-  var sheetId = String(payload.sheetId || '').trim();
-  var sheetName = String(payload.sheetName || DEFAULT_SHEET_NAME).trim();
+  var sheetId = sanitizeSheetId_(payload.sheetId);
+  var sheetName = sanitizeSheetName_(payload.sheetName || DEFAULT_SHEET_NAME);
   var writeToken = String(payload.writeToken || '').trim();
 
   if (!sheetId) {
@@ -358,6 +365,10 @@ function sanitizeSheetId_(value) {
   return String(value || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 }
 
+function sanitizeSheetName_(value) {
+  return String(value || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim() || DEFAULT_SHEET_NAME;
+}
+
 function canBootstrapBackend_(payload) {
   var configuredWriteToken = String(getScriptProperty_('CARD_ADMIN_WRITE_TOKEN') || '').trim();
   var incomingSheetId = String(payload && payload.sheetId ? payload.sheetId : '').trim();
@@ -384,8 +395,10 @@ function normalizeSlug_(slug) {
 }
 
 function getBackendStatus_() {
-  var sheetId = String(getScriptProperty_('CARD_RUNTIME_SHEET_ID') || '').trim();
-  var sheetName = String(getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME).trim();
+  var rawSheetId = String(getScriptProperty_('CARD_RUNTIME_SHEET_ID') || '');
+  var sheetId = sanitizeSheetId_(rawSheetId);
+  var rawSheetName = String(getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME);
+  var sheetName = sanitizeSheetName_(rawSheetName);
   var writeToken = String(getScriptProperty_('CARD_ADMIN_WRITE_TOKEN') || '').trim();
   var missingProperties = SCRIPT_PROPERTY_KEYS.filter(function (key) {
     if (key === 'CARD_RUNTIME_SHEET_NAME') {
@@ -415,9 +428,52 @@ function getBackendStatus_() {
       sheetName: !!sheetName,
       writeToken: !!writeToken,
     },
+    normalized: {
+      sheetIdSanitized: rawSheetId !== sheetId,
+      sheetNameSanitized: rawSheetName !== sheetName,
+    },
     missingProperties: missingProperties,
     sheetName: sheetName || DEFAULT_SHEET_NAME,
     sheetAccessible: sheetAccessible,
+    error: error,
+  };
+}
+
+function buildDebugRuntimeAccessPayload_() {
+  var rawSheetId = String(getScriptProperty_('CARD_RUNTIME_SHEET_ID') || '');
+  var rawSheetName = String(getScriptProperty_('CARD_RUNTIME_SHEET_NAME') || DEFAULT_SHEET_NAME);
+  var sheetId = sanitizeSheetId_(rawSheetId);
+  var sheetName = sanitizeSheetName_(rawSheetName);
+  var spreadsheetName = '';
+  var sheetAccessible = false;
+  var error = '';
+
+  try {
+    var spreadsheet = SpreadsheetApp.openById(sheetId);
+    spreadsheetName = spreadsheet.getName();
+    sheetAccessible = !!spreadsheet.getSheetByName(sheetName);
+    if (!sheetAccessible) {
+      error = 'Sheet "' + sheetName + '" was not found.';
+    }
+  } catch (runtimeError) {
+    error = toErrorMessage_(runtimeError);
+  }
+
+  return {
+    action: ACTION_DEBUG_RUNTIME_ACCESS,
+    configured: {
+      sheetId: sheetId,
+      sheetName: sheetName,
+    },
+    normalized: {
+      sheetIdSanitized: rawSheetId !== sheetId,
+      sheetNameSanitized: rawSheetName !== sheetName,
+    },
+    sheetAccessible: sheetAccessible,
+    spreadsheetName: spreadsheetName,
+    runningInLiveWebApp: true,
+    scriptId: ScriptApp.getScriptId(),
+    serviceUrl: ScriptApp.getService().getUrl(),
     error: error,
   };
 }

@@ -31,8 +31,8 @@ if ! clasp list >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[deploy-gas] clasp push"
-(cd "${ROOT_DIR}" && clasp push)
+echo "[deploy-gas] clasp push --force"
+(cd "${ROOT_DIR}" && clasp push --force)
 
 echo "[deploy-gas] Creating version"
 VERSION_OUTPUT="$(cd "${ROOT_DIR}" && clasp version "${VERSION_NOTE}")"

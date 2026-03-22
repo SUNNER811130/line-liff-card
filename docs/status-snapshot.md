@@ -3,7 +3,7 @@
 ## 已完成
 
 - `.clasp.json` 目前綁定正式 standalone GAS `1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
-- 正式 exec URL 已固定為 `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+- 正式 exec URL 已收斂到新的乾淨 Web App deployment：`https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec`
 - `.env.local` 與 `.env.production` 的 `VITE_CARD_API_BASE_URL` 已與正式 exec URL 對齊
 - library URL 已確認不是前台 `VITE_CARD_API_BASE_URL`，也不是 runtime backend API
 - shell env 已設為：
@@ -14,7 +14,7 @@
 - `CardPage` 與 share / Flex 流程共用同一份 runtime `config`
 - `/admin/` 已具備 load remote / save remote UI 與 API adapter
 - Apps Script + Google Sheets backend scaffold、deploy script、backend check script 都已在 repo
-- Apps Script backend 已支援 `health`、`getCard`、`saveCard`、`initBackend`、`setupScriptProperties`、`debugOpenSheet`
+- Apps Script backend 已支援 `health`、`getCard`、`saveCard`、`initBackend`、`setupScriptProperties`、`debugOpenSheet`、`debugRuntimeAccess`
 
 ## 現在的正式資料來源
 
@@ -25,9 +25,9 @@
 
 目前只承認這一個正式 backend exec URL：
 
-- `https://script.google.com/macros/s/AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA/exec`
+- `https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec`
 
-若文件提到舊 deployment，僅能作為歷史資訊；不要把 library URL 當成 backend API。
+舊的 `AKfycbz...` / `AKfycbw...` / `AKfycbyt...` deployment 僅作為歷史資訊；不要把 library URL 當成 backend API。
 
 ## 後台現況
 
@@ -45,16 +45,36 @@
 
 ## 目前阻塞點
 
-- 正式 exec URL、`.clasp.json`、`.env.local`、`.env.production`、shell env 都已對齊同一組正式後端，不需要再重建 GAS 專案
-- user 已手動完成 `debugOpenSheet()` 授權，且已手動更新同一支正式 Web App deployment
-- 但 2026-03-22 再次 live 驗證結果仍相同：正式 Web App 一碰正式 Sheet `1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg` 就回 `Illegal spreadsheet id or key`
-- 因此真正剩餘阻塞點仍在 Google 端對這份 Spreadsheet 的存取層，不是 repo 綁錯 script，也不是前端 URL 指錯
+- `.clasp.json`、新的 `.env.local`、新的 `.env.production` 都已收斂到同一個乾淨正式 deployment，不需要再重建 GAS 專案
+- 已完成：
+  - `clasp push --force`
+  - version `11`
+  - 舊正式 deployment `AKfycbz...` 更新到 `@11`
+  - 同一個 scriptId 下新建乾淨 deployment `AKfycbx7... @11`
+- `debugRuntimeAccess` 已證明 live Web App 正在吃最新 code、最新 scope、正確 scriptId、正確 exec URL、正確 sheetId / sheetName
+- 新舊兩個 live `/exec` 都仍回同樣的 `Illegal spreadsheet id or key`
+- 因此 stale deployment、live version 沒吃到最新 code、library URL、隱藏字元這些 repo 端問題都已排除；真正剩餘阻塞點已收斂到 Google live Web App execute-as / deployment runtime access 這一層
 - `initBackend` 與 `getCard(default)` 仍失敗，所以目前不能 seed `default`，也不能完成 `/admin/` 正式 load/save、前台 remote config live 驗證、或分享 Flex live 驗證
 
 ## 最新驗證
 
 - `clasp show-authorized-user`
   - `sunner811130@gmail.com`
+- `clasp deployments`
+  - `AKfycbytTueKUprCfCD98C8MO_hdjYig5qxnzhy7LfdfA6-X @HEAD`
+  - `AKfycbw4Ls51MGcC_VgYU6NilBE2YMabfiLPEHvrjYf6r_3GCGu2vGS-w0WB5Yy9oz597uDW @2`
+  - `AKfycbzFTQfZpsTiVhZOxi9v0yuYnJYfYj4orOfYqc5lQF65HCVvhkEW4axnvdmZlUP6rYhnTA @11`
+  - `AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA @11`
+- 唯一正式 backend exec URL
+  - `https://script.google.com/macros/s/AKfycbx7wAggK7H4G8CCfgfz6uy2ABOHI-GVSUt-fWvEJL7fy-7hFKlPVEZj9nm8x1J7yA6cHA/exec`
+- `GET /exec?action=debugRuntimeAccess`
+  - `ok: true`
+  - `scriptId: 1e2pcZd8c56D03YSYw6JhSSDlKMZzn_ALnTToF0SupNqFE8oVKtWkvwHG`
+  - `serviceUrl` 已對應新的正式 exec URL
+  - `sheetIdSanitized: false`
+  - `sheetNameSanitized: false`
+  - `sheetAccessible: false`
+  - `error: Illegal spreadsheet id or key: 1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg`
 - `GET /exec?action=health`
   - 現在已改成真實檢查 Sheet 可存取性
   - 2026-03-22 live 回應仍是：
@@ -78,12 +98,14 @@
   - `https://www.googleapis.com/auth/spreadsheets`
   - `https://www.googleapis.com/auth/drive.readonly`
 
-## 仍需人工確認
+## 剩餘唯一手動步驟
 
-- 確認 `1evhAzJ3lmip0Aaiy5d0pd8pXc9-uP2zsDqOqBPq5Flg` 的確是 `LIFF Card Runtime` 這份 Google Spreadsheet 本體 ID，而不是其他 Drive 檔案 ID
-- 直接在目前 `.clasp.json` 綁定的正式 Apps Script editor 內再次執行 `debugOpenSheet()`，確認同一帳號對這份 Spreadsheet 的實際存取結果
-- 若 `debugOpenSheet()` 在 Apps Script UI 內也仍失敗，就不是 repo 問題，而是這個 GAS 專案與這份 Sheet 的 Google 權限/目標 ID 仍不正確
-- 只有在 `health` 轉為成功後，才應繼續做 default seed、`/admin/` load/save、前台 remote config 與分享 Flex 的 live 驗證
+- 在同一支正式 standalone GAS 的 Apps Script UI 內，針對新的正式 deployment `AKfycbx7...` 進入 Manage deployments
+- 明確確認它是 `Web app`
+- 明確確認 `Execute as: Me (sunner811130@gmail.com)`
+- 明確確認 `Who has access: Anyone`
+- 按一次重新部署 / 更新，若 Google 再跳 deployment runtime 授權同意畫面，就完成那次同意
+- 除了這個 Google UI deployment runtime 步驟之外，repo 端可自動修的部分都已收斂完畢
 
 ## 驗證目標
 

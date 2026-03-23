@@ -7,6 +7,8 @@ import {
   type CreateAdminSessionRequest,
   extractConfigFromEnvelope,
   getCardApiErrorMessage,
+  requireAdminSessionToken,
+  requireCardApiBaseUrl,
   readCardApiJsonResponse,
   type SaveCardRequest,
   type UploadImageRequest,
@@ -49,9 +51,11 @@ export type UploadedImageResult = {
 
 const DEFAULT_FETCH: FetchLike = (...args) => fetch(...args);
 
+/**
+ * Runtime data adapter shared by `/card/default/` and `/admin/`. Preserve the
+ * existing GAS exec URL contract, fallback behavior, and CardConfig shape.
+ */
 export const getCardApiBaseUrl = (): string => import.meta.env.VITE_CARD_API_BASE_URL?.trim() ?? '';
-
-const normalizeBaseUrl = (baseUrl?: string): string => baseUrl?.trim() ?? '';
 
 const validateRemoteConfig = (config: unknown, expectedSlug: string): CardConfig => {
   assertCardConfig(config);
@@ -76,10 +80,7 @@ export async function fetchRemoteCardConfig(
   } = {},
 ): Promise<CardConfig> {
   const expectedSlug = getCanonicalCardSlug(slug || defaultCardSlug);
-  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
-  if (!baseUrl) {
-    throw new Error('未設定正式後台 exec URL。');
-  }
+  const baseUrl = requireCardApiBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
 
   const response = await (options.fetchImpl ?? DEFAULT_FETCH)(buildCardApiUrl(baseUrl, { action: 'getCard', slug: expectedSlug }), {
     method: 'GET',
@@ -140,15 +141,8 @@ export async function saveRemoteCardConfig(
   },
 ): Promise<SaveRuntimeCardResult> {
   const expectedSlug = getCanonicalCardSlug(slug || config.slug || defaultCardSlug);
-  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
-  if (!baseUrl) {
-    throw new Error('未設定正式後台 exec URL。');
-  }
-
-  const adminSession = options.adminSession?.trim() ?? '';
-  if (!adminSession) {
-    throw new Error('請先完成管理員解鎖。');
-  }
+  const baseUrl = requireCardApiBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
+  const adminSession = requireAdminSessionToken(options.adminSession);
 
   const validatedConfig = validateRemoteConfig(config, expectedSlug);
   const requestBody: SaveCardRequest = {
@@ -181,10 +175,7 @@ export async function createAdminSession(
     fetchImpl?: FetchLike;
   } = {},
 ): Promise<AdminSessionResult> {
-  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
-  if (!baseUrl) {
-    throw new Error('未設定正式後台 exec URL。');
-  }
+  const baseUrl = requireCardApiBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
 
   const trimmedSecret = secret.trim();
   if (!trimmedSecret) {
@@ -223,10 +214,7 @@ export async function verifyAdminSession(
     fetchImpl?: FetchLike;
   } = {},
 ): Promise<VerifyAdminSessionResult> {
-  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
-  if (!baseUrl) {
-    throw new Error('未設定正式後台 exec URL。');
-  }
+  const baseUrl = requireCardApiBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
 
   const trimmedSession = adminSession.trim();
   if (!trimmedSession) {
@@ -262,15 +250,8 @@ export async function uploadRuntimeImage(
     fetchImpl?: FetchLike;
   },
 ): Promise<UploadedImageResult> {
-  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
-  if (!baseUrl) {
-    throw new Error('未設定正式後台 exec URL。');
-  }
-
-  const trimmedSession = options.adminSession.trim();
-  if (!trimmedSession) {
-    throw new Error('請先完成管理員解鎖。');
-  }
+  const baseUrl = requireCardApiBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
+  const trimmedSession = requireAdminSessionToken(options.adminSession);
 
   const requestBody: UploadImageRequest = {
     action: 'uploadImage',

@@ -1,5 +1,9 @@
 import type { CardConfig } from '../content/cards/types';
 
+/**
+ * Backend envelope and request helpers for the bound Apps Script Web App.
+ * Keep request body shape, content-type, and response field fallbacks stable.
+ */
 type CardApiDataEnvelope = {
   config?: unknown;
   card?: unknown;
@@ -71,6 +75,8 @@ export const createCardApiPostInit = (payload: Record<string, unknown>): Request
   body: JSON.stringify(payload),
 });
 
+export const resolveCardApiBaseUrl = (baseUrl?: string): string => baseUrl?.trim() ?? '';
+
 export const buildCardApiUrl = (baseUrl: string, params: Record<string, string>): string => {
   const url = new URL(baseUrl);
   Object.entries(params).forEach(([key, value]) => {
@@ -113,4 +119,22 @@ export const getCardApiErrorMessage = (payload: CardApiEnvelope, fallback: strin
   }
 
   return fallback;
+};
+
+export const requireCardApiBaseUrl = (baseUrl?: string): string => {
+  const normalizedBaseUrl = resolveCardApiBaseUrl(baseUrl);
+  if (!normalizedBaseUrl) {
+    throw new Error('未設定正式後台 exec URL。');
+  }
+
+  return normalizedBaseUrl;
+};
+
+export const requireAdminSessionToken = (adminSession: string): string => {
+  const trimmedSession = adminSession.trim();
+  if (!trimmedSession) {
+    throw new Error('請先完成管理員解鎖。');
+  }
+
+  return trimmedSession;
 };

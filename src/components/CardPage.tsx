@@ -25,6 +25,10 @@ const shareHintByState = {
   fallback: '目前以網頁版顯示，分享時會自動切換到可用方式。',
 } as const;
 
+/**
+ * Runtime card renderer for `/card/default/` and admin preview. Keep rendered
+ * structure, LIFF share behavior, and QR/share fallbacks functionally stable.
+ */
 export function CardPage({ config, previewMode = false, embedded = false }: CardPageProps) {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [shareMessage, setShareMessage] = useState<string | null>(null);

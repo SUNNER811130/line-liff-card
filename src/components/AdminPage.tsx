@@ -1,6 +1,29 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { CardPage } from './CardPage';
 import {
+  ADMIN_DESCRIPTION,
+  ADMIN_SESSION_EXPIRES_AT_STORAGE_KEY,
+  ADMIN_SESSION_STORAGE_KEY,
+  ADMIN_TITLE,
+  ADMIN_UPDATED_BY_STORAGE_KEY,
+  applyUploadedImageToDraft,
+  type AssetFieldKey,
+  type AssetUploadState,
+  coerceDraft,
+  type DraftRestoreState,
+  formatSaveMessage,
+  formatSessionLabel,
+  getImageFieldError,
+  getLinkFieldError,
+  isImagePreviewable,
+  normalizeAction,
+  normalizeLoadedDraft,
+  parseStringList,
+  serializeStringList,
+  type StatusMessage,
+  toReadableBoolean,
+} from './admin-page-helpers';
+import {
   cloneCardConfig,
   createDefaultCardDraft,
   getAdminDraftStorageKey,
@@ -8,7 +31,6 @@ import {
   serializeCardConfig,
 } from '../content/cards/draft';
 import type { CardActionConfig, CardActionTone, CardConfig } from '../content/cards/types';
-import { assertCardConfig } from '../content/cards/schema';
 import {
   createAdminSession,
   fetchRemoteCardConfig,
@@ -19,7 +41,7 @@ import {
 } from '../lib/card-source';
 import { prepareImageUpload } from '../lib/image-upload';
 import { applyBasicSeo } from '../lib/seo';
-import { isAllowedLink, isHttpUrl, isRelativeAssetPath, validateCardConfig } from '../lib/card-validation';
+import { isAllowedLink, isHttpUrl, validateCardConfig } from '../lib/card-validation';
 import {
   ADMIN_FIELD_GROUPS,
   ADMIN_FIELD_GROUPS_BY_KEY,
@@ -28,31 +50,6 @@ import {
   type AdminFieldRegistryItem,
   type FieldVisibilityScope,
 } from '../lib/card-field-registry';
-
-const adminTitle = '正式電子名片後台';
-const adminDescription = '管理正式 runtime config、圖片資產、分享文案與按鈕設定。';
-const ADMIN_SESSION_STORAGE_KEY = 'line-liff-card.admin-session';
-const ADMIN_SESSION_EXPIRES_AT_STORAGE_KEY = 'line-liff-card.admin-session-expires-at';
-const ADMIN_UPDATED_BY_STORAGE_KEY = 'line-liff-card.admin-updated-by';
-
-type StatusTone = 'success' | 'error' | 'info';
-type AssetFieldKey = 'photo' | 'ogImage';
-
-type StatusMessage = {
-  tone: StatusTone;
-  text: string;
-};
-
-type DraftRestoreState = {
-  key: string;
-  config: CardConfig;
-} | null;
-
-type AssetUploadState = {
-  activeField: AssetFieldKey | null;
-  text: string;
-  tone: StatusTone;
-} | null;
 
 type FieldProps = {
   label: string;
@@ -78,77 +75,14 @@ const visibilityScopeLabel: Record<FieldVisibilityScope, string> = {
 
 const actionToneOptions: CardActionTone[] = ['primary', 'secondary'];
 
-const serializeStringList = (value: string[]): string => value.join('\n');
-
-const parseStringList = (value: string): string[] =>
-  value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-const toReadableBoolean = (value: boolean): string => (value ? 'true' : 'false');
-
-const formatSaveMessage = (updatedAt?: string, updatedBy?: string): string => {
-  const detail = [updatedAt ? `更新時間：${updatedAt}` : '', updatedBy ? `更新者：${updatedBy}` : '']
-    .filter(Boolean)
-    .join('｜');
-  return detail ? `正式名片已儲存。${detail}` : '正式名片已儲存。';
-};
-
-const normalizeAction = (action: CardActionConfig, fallbackId: string): CardActionConfig => ({
-  id: action.id || fallbackId,
-  label: action.label ?? '',
-  url: action.url ?? '',
-  tone: action.tone ?? 'secondary',
-  enabled: action.enabled ?? true,
-});
-
-const coerceDraft = (draft: CardConfig): CardConfig => ({
-  ...draft,
-  actions: draft.actions.slice(0, 2).map((action, index) =>
-    normalizeAction(action, index === 0 ? 'contact' : 'services'),
-  ),
-  share: {
-    ...draft.share,
-    buttonLabel: draft.share.buttonLabel?.trim() || '分享此電子名片給 LINE 好友',
-  },
-});
-
-const normalizeLoadedDraft = (draft: CardConfig): CardConfig => {
-  assertCardConfig(draft);
-  return coerceDraft(draft);
-};
-
-const isImagePreviewable = (value: string): boolean => {
-  const trimmed = value.trim();
-  return Boolean(trimmed) && (trimmed.startsWith('data:') || trimmed.startsWith('/') || isHttpUrl(trimmed) || isRelativeAssetPath(trimmed));
-};
-
-const getImageFieldError = (value: string, label: string): string | null => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return `${label} 不能為空。`;
-  }
-
-  return isImagePreviewable(trimmed) ? null : `${label} 格式不正確。`;
-};
-
-const getLinkFieldError = (value: string, label: string): string | null => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  return isAllowedLink(trimmed) ? null : `${label} 格式不正確。`;
-};
-
-const formatSessionLabel = (expiresAt?: string): string =>
-  expiresAt ? `已解鎖，本次 session 到期時間：${expiresAt}` : '已解鎖，本次 session 有效。';
-
 const openExternalUrl = (url: string) => {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
 
+/**
+ * Formal admin CMS for the single runtime card config. Keep unlock/save/upload
+ * flow, field keys, and preview behavior aligned with the production runtime.
+ */
 function AdminTextField({
   label,
   value,
@@ -330,7 +264,7 @@ export function AdminPage() {
     .join('｜');
 
   useEffect(() => {
-    applyBasicSeo(adminTitle, adminDescription);
+    applyBasicSeo(ADMIN_TITLE, ADMIN_DESCRIPTION);
   }, []);
 
   useEffect(() => {
@@ -1070,22 +1004,7 @@ export function AdminPage() {
       });
 
       patchDraft((current) =>
-        field === 'photo'
-          ? {
-              ...current,
-              photo: {
-                ...current.photo,
-                src: uploaded.publicUrl,
-                alt: current.photo.alt || file.name,
-              },
-            }
-          : {
-              ...current,
-              seo: {
-                ...current.seo,
-                ogImage: uploaded.publicUrl,
-              },
-            },
+        applyUploadedImageToDraft(current, field, uploaded.publicUrl, file.name),
       );
       setAssetUploadStatus({
         activeField: field,

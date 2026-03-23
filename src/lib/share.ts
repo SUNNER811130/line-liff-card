@@ -10,6 +10,10 @@ export type ShareResult = {
   message: string;
 };
 
+/**
+ * LIFF/web share adapter for the current runtime card. Preserve Flex payload
+ * fields, forward-share URL format, and fallback order.
+ */
 const SHARE_INTENT_PARAM = 'intent';
 const SHARE_INTENT_ID_PARAM = 'intentId';
 const SHARE_SOURCE_PARAM = 'source';
@@ -46,6 +50,38 @@ const buildShareIntentUrl = (slug: string, source: string, intentId?: string): s
 
 export const buildFlexForwardShareUrl = (slug: string): string =>
   buildShareIntentUrl(slug, SHARE_SOURCE_FLEX_FORWARD);
+
+const buildFlexFooterButtons = (config: CardConfig, pageUrl: string) => [
+  {
+    type: 'button' as const,
+    style: 'primary' as const,
+    color: '#163863',
+    action: {
+      type: 'uri' as const,
+      label: config.actions[0]?.label ?? '查看名片',
+      uri: resolveActionUrl(config.actions[0]?.url ?? '', pageUrl),
+    },
+  },
+  {
+    type: 'button' as const,
+    style: 'secondary' as const,
+    action: {
+      type: 'uri' as const,
+      label: config.actions[1]?.label ?? '立即聯絡',
+      uri: resolveActionUrl(config.actions[1]?.url ?? '', pageUrl),
+    },
+  },
+  {
+    type: 'button' as const,
+    style: 'link' as const,
+    height: 'sm' as const,
+    action: {
+      type: 'uri' as const,
+      label: FLEX_FORWARD_SHARE_LABEL,
+      uri: buildFlexForwardShareUrl(config.slug),
+    },
+  },
+];
 
 export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string) => ({
   type: 'flex' as const,
@@ -102,37 +138,7 @@ export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: 
       type: 'box' as const,
       layout: 'vertical' as const,
       spacing: 'sm' as const,
-      contents: [
-        {
-          type: 'button' as const,
-          style: 'primary' as const,
-          color: '#163863',
-          action: {
-            type: 'uri' as const,
-            label: config.actions[0]?.label ?? '查看名片',
-            uri: resolveActionUrl(config.actions[0]?.url ?? '', pageUrl),
-          },
-        },
-        {
-          type: 'button' as const,
-          style: 'secondary' as const,
-          action: {
-            type: 'uri' as const,
-            label: config.actions[1]?.label ?? '立即聯絡',
-            uri: resolveActionUrl(config.actions[1]?.url ?? '', pageUrl),
-          },
-        },
-        {
-          type: 'button' as const,
-          style: 'link' as const,
-          height: 'sm' as const,
-          action: {
-            type: 'uri' as const,
-            label: FLEX_FORWARD_SHARE_LABEL,
-            uri: buildFlexForwardShareUrl(config.slug),
-          },
-        },
-      ],
+      contents: buildFlexFooterButtons(config, pageUrl),
     },
   },
 });

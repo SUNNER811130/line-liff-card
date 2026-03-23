@@ -47,6 +47,8 @@ export type UploadedImageResult = {
   viewUrl?: string;
   downloadUrl?: string;
   mimeType?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 };
 
 const DEFAULT_FETCH: FetchLike = (...args) => fetch(...args);
@@ -283,6 +285,8 @@ export async function uploadRuntimeImage(
     viewUrl?: string;
     downloadUrl?: string;
     mimeType?: string;
+    updatedAt?: string;
+    updatedBy?: string;
   };
 
   return {
@@ -291,5 +295,7 @@ export async function uploadRuntimeImage(
     viewUrl: successPayload.viewUrl,
     downloadUrl: successPayload.downloadUrl,
     mimeType: successPayload.mimeType,
+    updatedAt: successPayload.updatedAt,
+    updatedBy: successPayload.updatedBy,
   };
 }

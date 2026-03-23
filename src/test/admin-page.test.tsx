@@ -53,6 +53,8 @@ const buildFetchMock = (remoteConfig?: typeof defaultCard) =>
           publicUrl: 'https://drive.google.com/uc?export=view&id=drive-file-123',
           viewUrl: 'https://drive.google.com/file/d/drive-file-123/view',
           downloadUrl: 'https://drive.google.com/uc?export=download&id=drive-file-123',
+          updatedAt: '2026-03-22T11:00:00.000Z',
+          updatedBy: 'admin',
         });
       }
 
@@ -315,7 +317,38 @@ describe('AdminPage', () => {
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('https://drive.google.com/uc?export=view&id=drive-file-123')).toBeInTheDocument();
-      expect(screen.getByText(/圖片已上傳到 Google Drive/)).toBeInTheDocument();
+      expect(screen.getByText(/圖片已上傳到 Google Drive，並同步寫入正式 photo\.src/)).toBeInTheDocument();
+      expect(screen.getAllByText(/最近成功儲存：2026-03-22T11:00:00.000Z/).length).toBeGreaterThan(0);
+    });
+  });
+
+  it('keeps unrelated local edits dirty while marking uploaded image as already synced', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    const { container } = render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.clear(screen.getByLabelText('姓名'));
+    await user.type(screen.getByLabelText('姓名'), '尚未儲存的新姓名');
+    expect(screen.getByText('尚未儲存變更。重新整理或離開頁面前會提醒。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '上傳頭像 / 主視覺' }));
+    const fileInputs = Array.from(container.querySelectorAll('input[type="file"]'));
+    const imageInput = fileInputs[0];
+    const file = new File(['image'], 'runtime-hero.png', { type: 'image/png' });
+    fireEvent.change(imageInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('https://drive.google.com/uc?export=view&id=drive-file-123')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('尚未儲存的新姓名')).toBeInTheDocument();
+      expect(screen.getByText('尚未儲存變更。重新整理或離開頁面前會提醒。')).toBeInTheDocument();
     });
   });
 });

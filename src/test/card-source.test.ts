@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloneCardConfig } from '../content/cards/draft';
 import { defaultCard } from '../content/cards/default';
-import { fetchRemoteCardConfig, loadRuntimeCard } from '../lib/card-source';
+import { fetchRemoteCardConfig, loadRuntimeCard, uploadRuntimeImage } from '../lib/card-source';
 
 const createJsonResponse = (payload: unknown, init?: ResponseInit) =>
   new Response(JSON.stringify(payload), {
@@ -74,5 +74,40 @@ describe('card source adapter', () => {
         ),
       }),
     ).rejects.toThrow('card.photo.src 必須存在');
+  });
+
+  it('returns upload metadata while preserving the existing upload contract', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
+        ok: true,
+        fileId: 'drive-file-123',
+        publicUrl: 'https://drive.google.com/uc?export=view&id=drive-file-123',
+        viewUrl: 'https://drive.google.com/file/d/drive-file-123/view',
+        downloadUrl: 'https://drive.google.com/uc?export=download&id=drive-file-123',
+        updatedAt: '2026-03-22T11:00:00.000Z',
+        updatedBy: 'admin',
+      }),
+    );
+
+    await expect(
+      uploadRuntimeImage({
+        slug: 'default',
+        field: 'photo',
+        adminSession: 'session-123',
+        fileName: 'runtime-hero.png',
+        mimeType: 'image/png',
+        base64Data: 'cHJlcGFyZWQ=',
+        baseUrl: 'https://example.test/card-api',
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toEqual({
+      fileId: 'drive-file-123',
+      publicUrl: 'https://drive.google.com/uc?export=view&id=drive-file-123',
+      viewUrl: 'https://drive.google.com/file/d/drive-file-123/view',
+      downloadUrl: 'https://drive.google.com/uc?export=download&id=drive-file-123',
+      updatedAt: '2026-03-22T11:00:00.000Z',
+      updatedBy: 'admin',
+      mimeType: undefined,
+    });
   });
 });

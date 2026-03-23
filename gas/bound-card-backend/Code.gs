@@ -168,7 +168,7 @@ function verifyAdminSession_(payload) {
 }
 
 function uploadImage_(payload) {
-  verifyAdminSessionToken_(payload.adminSession);
+  var session = verifyAdminSessionToken_(payload.adminSession);
 
   var folderId = sanitizeRequiredScriptProperty_(SCRIPT_PROPERTY_KEYS.driveUploadFolderId);
   var folder = DriveApp.getFolderById(folderId);
@@ -193,13 +193,36 @@ function uploadImage_(payload) {
   var blob = Utilities.newBlob(bytes, mimeType, buildStoredFileName_(slug, field, fileName));
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var publicUrl = buildDrivePublicUrl_(file.getId());
+  var runtime = getRuntimeContext_();
+  var row = findCardRowBySlug_(runtime.sheet, slug);
+  if (!row) {
+    throw new Error('Card not found.');
+  }
+
+  var config = parseStoredConfig_(row.configJson);
+  if (field === 'photo') {
+    config.photo.src = publicUrl;
+  } else {
+    config.seo.ogImage = publicUrl;
+  }
+
+  assertCardConfigShape_(config);
+  var updatedAt = new Date().toISOString();
+  var updatedBy = normalizeUserLabel_(session.subject || 'admin');
+  upsertCardRow_(runtime.sheet, slug, JSON.stringify(config), updatedAt, updatedBy);
 
   return {
+    slug: slug,
     fileId: file.getId(),
-    publicUrl: buildDrivePublicUrl_(file.getId()),
+    publicUrl: publicUrl,
     viewUrl: file.getUrl(),
     downloadUrl: buildDriveDownloadUrl_(file.getId()),
     mimeType: file.getMimeType(),
+    config: config,
+    updatedAt: updatedAt,
+    updatedBy: updatedBy,
+    source: 'bound-spreadsheet',
   };
 }
 

@@ -1003,13 +1003,16 @@ export function AdminPage() {
         baseUrl: apiBaseUrl,
       });
 
-      patchDraft((current) =>
-        applyUploadedImageToDraft(current, field, uploaded.publicUrl, file.name),
-      );
+      patchDraft((current) => applyUploadedImageToDraft(current, field, uploaded.publicUrl, file.name));
+      setBaselineConfig((current) => applyUploadedImageToDraft(current, field, uploaded.publicUrl, file.name));
+      setDraftRestoreState(null);
+      setLocalDraftNote('圖片已同步寫入正式 runtime config；其他欄位若有變更，仍需按下儲存才會正式生效。');
+      setLastSavedAt(uploaded.updatedAt);
+      setLastSavedBy(uploaded.updatedBy);
       setAssetUploadStatus({
         activeField: field,
         tone: 'success',
-        text: `圖片已上傳到 Google Drive，已寫入 ${field === 'photo' ? '正式圖片 URL' : 'OG Image URL'} 草稿欄位。`,
+        text: `圖片已上傳到 Google Drive，並同步寫入正式 ${field === 'photo' ? 'photo.src' : 'seo.ogImage'}。`,
       });
     } catch (error) {
       setAssetUploadStatus({

@@ -3,10 +3,19 @@ import type { CardConfig, CardStylesConfig } from '../content/cards/types';
 export const FLEX_HERO_IMAGE_ASPECT_RATIO = '4:3';
 export const FLEX_HERO_IMAGE_SIZE = 'full';
 export const FLEX_HERO_IMAGE_ASPECT_MODE = 'cover';
+export const FLEX_BUBBLE_SIZE = 'mega';
 export const FLEX_HERO_IMAGE_RECOMMENDED_WIDTH = 1200;
 export const FLEX_HERO_IMAGE_RECOMMENDED_HEIGHT = 900;
 export const FLEX_HERO_IMAGE_MIN_WIDTH = 800;
 export const FLEX_HERO_IMAGE_MIN_HEIGHT = 600;
+
+export const HERO_ASPECT_RATIO_OPTIONS = ['4:3', '20:13', '1:1'] as const;
+export const HERO_ASPECT_MODE_OPTIONS = ['cover', 'contain'] as const;
+export const FLEX_BUBBLE_SIZE_OPTIONS = ['kilo', 'mega', 'giga'] as const;
+
+export type HeroAspectRatioPreset = (typeof HERO_ASPECT_RATIO_OPTIONS)[number];
+export type HeroAspectModePreset = (typeof HERO_ASPECT_MODE_OPTIONS)[number];
+export type FlexBubbleSizePreset = (typeof FLEX_BUBBLE_SIZE_OPTIONS)[number];
 
 export type CardStyleScope = 'both' | 'web' | 'flex' | 'system';
 
@@ -21,6 +30,57 @@ export type CardStyleRegistryItem = {
 };
 
 const cardStyleRegistry = [
+  {
+    key: 'heroAspectRatio',
+    label: 'Hero 比例',
+    scope: 'both',
+    helpText: '調整主視覺顯示容器比例。未填時，Flex 維持正式版 4:3；網頁維持目前自適應高度外觀。',
+    placeholder: '4:3',
+    webDefault: '',
+    flexDefault: FLEX_HERO_IMAGE_ASPECT_RATIO,
+  },
+  {
+    key: 'heroAspectMode',
+    label: 'Hero 顯示模式',
+    scope: 'both',
+    helpText: '調整主視覺以 cover 或 contain 顯示。未填時沿用正式版 cover。',
+    placeholder: 'cover',
+    webDefault: FLEX_HERO_IMAGE_ASPECT_MODE,
+    flexDefault: FLEX_HERO_IMAGE_ASPECT_MODE,
+  },
+  {
+    key: 'flexBubbleSize',
+    label: 'Flex Bubble 尺寸',
+    scope: 'flex',
+    helpText: '只影響 LINE 分享 Flex bubble 尺寸。未填時沿用目前正式版預設 mega。',
+    placeholder: 'mega',
+    webDefault: FLEX_BUBBLE_SIZE,
+    flexDefault: FLEX_BUBBLE_SIZE,
+  },
+  {
+    key: 'heroZoom',
+    label: '圖片縮放',
+    scope: 'web',
+    helpText: '只調整 `/card/default/` 與 admin 主視覺預覽的顯示縮放，不會改原圖檔。未填時為 100%。',
+    placeholder: '100',
+    webDefault: '100',
+  },
+  {
+    key: 'heroFocalX',
+    label: '圖片焦點 X',
+    scope: 'web',
+    helpText: '只調整 `/card/default/` 與 admin 主視覺預覽的水平焦點位置。-100 靠左，0 置中，100 靠右。',
+    placeholder: '0',
+    webDefault: '0',
+  },
+  {
+    key: 'heroFocalY',
+    label: '圖片焦點 Y',
+    scope: 'web',
+    helpText: '只調整 `/card/default/` 與 admin 主視覺預覽的垂直焦點位置。-100 靠上，0 置中，100 靠下。',
+    placeholder: '0',
+    webDefault: '0',
+  },
   {
     key: 'brandTextColor',
     label: '品牌 / 小標字色',
@@ -214,6 +274,44 @@ export const CARD_STYLE_REGISTRY_BY_KEY = Object.fromEntries(
 
 const trimStyleValue = (value: string | undefined): string => value?.trim() ?? '';
 
+const HERO_ASPECT_RATIO_CSS_VALUE: Record<HeroAspectRatioPreset, string> = {
+  '4:3': '4 / 3',
+  '20:13': '20 / 13',
+  '1:1': '1 / 1',
+};
+
+const isHeroAspectRatioPreset = (value: string): value is HeroAspectRatioPreset =>
+  (HERO_ASPECT_RATIO_OPTIONS as readonly string[]).includes(value);
+
+const isHeroAspectModePreset = (value: string): value is HeroAspectModePreset =>
+  (HERO_ASPECT_MODE_OPTIONS as readonly string[]).includes(value);
+
+const isFlexBubbleSizePreset = (value: string): value is FlexBubbleSizePreset =>
+  (FLEX_BUBBLE_SIZE_OPTIONS as readonly string[]).includes(value);
+
+const clampNumber = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+const getClampedNumberStyleValue = (
+  value: string | undefined,
+  options: {
+    fallback: number;
+    min: number;
+    max: number;
+  },
+): number => {
+  const trimmed = trimStyleValue(value);
+  if (!trimmed) {
+    return options.fallback;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return options.fallback;
+  }
+
+  return clampNumber(parsed, options.min, options.max);
+};
+
 const getResolvedSubtitleSizeValue = (styles: CardStylesConfig | undefined): string => {
   const configuredSubtitleSize = trimStyleValue(styles?.subtitleFontSize);
   if (configuredSubtitleSize) {
@@ -244,6 +342,87 @@ const normalizeLengthValue = (value: string): string => {
 export const getCardStyleInputValue = (styles: CardStylesConfig | undefined, key: keyof CardStylesConfig): string =>
   trimStyleValue(styles?.[key]);
 
+export const getResolvedHeroAspectRatioValue = (
+  styles: CardStylesConfig | undefined,
+  surface: 'web' | 'flex',
+): HeroAspectRatioPreset | '' => {
+  const configured = trimStyleValue(styles?.heroAspectRatio);
+  if (isHeroAspectRatioPreset(configured)) {
+    return configured;
+  }
+
+  return surface === 'flex' ? FLEX_HERO_IMAGE_ASPECT_RATIO : '';
+};
+
+export const getResolvedHeroAspectModeValue = (
+  styles: CardStylesConfig | undefined,
+): HeroAspectModePreset => {
+  const configured = trimStyleValue(styles?.heroAspectMode);
+  return isHeroAspectModePreset(configured) ? configured : FLEX_HERO_IMAGE_ASPECT_MODE;
+};
+
+export const getResolvedFlexBubbleSizeValue = (
+  styles: CardStylesConfig | undefined,
+): FlexBubbleSizePreset => {
+  const configured = trimStyleValue(styles?.flexBubbleSize);
+  return isFlexBubbleSizePreset(configured) ? configured : FLEX_BUBBLE_SIZE;
+};
+
+export const getResolvedHeroZoomValue = (styles: CardStylesConfig | undefined): number =>
+  getClampedNumberStyleValue(styles?.heroZoom, {
+    fallback: 100,
+    min: 50,
+    max: 150,
+  });
+
+export const getResolvedHeroFocalXValue = (styles: CardStylesConfig | undefined): number =>
+  getClampedNumberStyleValue(styles?.heroFocalX, {
+    fallback: 0,
+    min: -100,
+    max: 100,
+  });
+
+export const getResolvedHeroFocalYValue = (styles: CardStylesConfig | undefined): number =>
+  getClampedNumberStyleValue(styles?.heroFocalY, {
+    fallback: 0,
+    min: -100,
+    max: 100,
+  });
+
+const toHeroFocalPercent = (focalValue: number): string => `${((focalValue + 100) / 2).toFixed(2)}%`;
+
+export type CardHeroStyleTokens = {
+  webAspectRatio: string;
+  flexAspectRatio: HeroAspectRatioPreset;
+  aspectMode: HeroAspectModePreset;
+  bubbleSize: FlexBubbleSizePreset;
+  zoomPercent: number;
+  zoomScale: number;
+  focalX: number;
+  focalY: number;
+  objectPosition: string;
+};
+
+export const buildCardHeroStyleTokens = (styles: CardStylesConfig | undefined): CardHeroStyleTokens => {
+  const webAspectRatio = getResolvedHeroAspectRatioValue(styles, 'web');
+  const flexAspectRatio = getResolvedHeroAspectRatioValue(styles, 'flex') || FLEX_HERO_IMAGE_ASPECT_RATIO;
+  const zoomPercent = getResolvedHeroZoomValue(styles);
+  const focalX = getResolvedHeroFocalXValue(styles);
+  const focalY = getResolvedHeroFocalYValue(styles);
+
+  return {
+    webAspectRatio: webAspectRatio ? HERO_ASPECT_RATIO_CSS_VALUE[webAspectRatio] : 'auto',
+    flexAspectRatio,
+    aspectMode: getResolvedHeroAspectModeValue(styles),
+    bubbleSize: getResolvedFlexBubbleSizeValue(styles),
+    zoomPercent,
+    zoomScale: zoomPercent / 100,
+    focalX,
+    focalY,
+    objectPosition: `${toHeroFocalPercent(focalX)} ${toHeroFocalPercent(focalY)}`,
+  };
+};
+
 export const getResolvedCardStyleValue = (
   styles: CardStylesConfig | undefined,
   key: keyof CardStylesConfig,
@@ -271,29 +450,40 @@ export const getResolvedCardStyleValue = (
   return rawValue;
 };
 
-export const buildCardWebStyleVariables = (config: CardConfig): Record<string, string> => ({
-  '--card-brand-color': getResolvedCardStyleValue(config.styles, 'brandTextColor', 'web'),
-  '--card-brand-size': getResolvedCardStyleValue(config.styles, 'brandFontSize', 'web'),
-  '--card-name-color': getResolvedCardStyleValue(config.styles, 'nameTextColor', 'web'),
-  '--card-name-size': getResolvedCardStyleValue(config.styles, 'nameFontSize', 'web'),
-  '--card-title-color': getResolvedCardStyleValue(config.styles, 'titleTextColor', 'web'),
-  '--card-title-size': getResolvedCardStyleValue(config.styles, 'titleFontSize', 'web'),
-  '--card-subtitle-color': getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'web'),
-  '--card-subtitle-size': getResolvedSubtitleSizeValue(config.styles),
-  '--card-intro-color': getResolvedCardStyleValue(config.styles, 'introTextColor', 'web'),
-  '--card-intro-size': getResolvedCardStyleValue(config.styles, 'introFontSize', 'web'),
-  '--card-headline-size': getResolvedCardStyleValue(config.styles, 'headlineFontSize', 'web'),
-  '--card-subheadline-size': getResolvedSubtitleSizeValue(config.styles),
-  '--card-primary-button-bg': getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'web'),
-  '--card-primary-button-color': getResolvedCardStyleValue(config.styles, 'primaryButtonTextColor', 'web'),
-  '--card-secondary-button-bg': getResolvedCardStyleValue(config.styles, 'secondaryButtonBackgroundColor', 'web'),
-  '--card-secondary-button-color': getResolvedCardStyleValue(config.styles, 'secondaryButtonTextColor', 'web'),
-  '--card-button-radius': getResolvedCardStyleValue(config.styles, 'buttonBorderRadius', 'web'),
-  '--card-section-gap': getResolvedCardStyleValue(config.styles, 'sectionGap', 'web'),
-  '--card-surface-padding': getResolvedCardStyleValue(config.styles, 'cardPadding', 'web'),
-});
+export const buildCardWebStyleVariables = (config: CardConfig): Record<string, string> => {
+  const heroTokens = buildCardHeroStyleTokens(config.styles);
+
+  return {
+    '--card-hero-aspect-ratio': heroTokens.webAspectRatio,
+    '--card-hero-object-fit': heroTokens.aspectMode,
+    '--card-hero-scale': String(heroTokens.zoomScale),
+    '--card-hero-object-position': heroTokens.objectPosition,
+    '--card-brand-color': getResolvedCardStyleValue(config.styles, 'brandTextColor', 'web'),
+    '--card-brand-size': getResolvedCardStyleValue(config.styles, 'brandFontSize', 'web'),
+    '--card-name-color': getResolvedCardStyleValue(config.styles, 'nameTextColor', 'web'),
+    '--card-name-size': getResolvedCardStyleValue(config.styles, 'nameFontSize', 'web'),
+    '--card-title-color': getResolvedCardStyleValue(config.styles, 'titleTextColor', 'web'),
+    '--card-title-size': getResolvedCardStyleValue(config.styles, 'titleFontSize', 'web'),
+    '--card-subtitle-color': getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'web'),
+    '--card-subtitle-size': getResolvedSubtitleSizeValue(config.styles),
+    '--card-intro-color': getResolvedCardStyleValue(config.styles, 'introTextColor', 'web'),
+    '--card-intro-size': getResolvedCardStyleValue(config.styles, 'introFontSize', 'web'),
+    '--card-headline-size': getResolvedCardStyleValue(config.styles, 'headlineFontSize', 'web'),
+    '--card-subheadline-size': getResolvedSubtitleSizeValue(config.styles),
+    '--card-primary-button-bg': getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'web'),
+    '--card-primary-button-color': getResolvedCardStyleValue(config.styles, 'primaryButtonTextColor', 'web'),
+    '--card-secondary-button-bg': getResolvedCardStyleValue(config.styles, 'secondaryButtonBackgroundColor', 'web'),
+    '--card-secondary-button-color': getResolvedCardStyleValue(config.styles, 'secondaryButtonTextColor', 'web'),
+    '--card-button-radius': getResolvedCardStyleValue(config.styles, 'buttonBorderRadius', 'web'),
+    '--card-section-gap': getResolvedCardStyleValue(config.styles, 'sectionGap', 'web'),
+    '--card-surface-padding': getResolvedCardStyleValue(config.styles, 'cardPadding', 'web'),
+  };
+};
 
 export type FlexStyleTokens = {
+  bubbleSize: FlexBubbleSizePreset;
+  heroAspectRatio: HeroAspectRatioPreset;
+  heroAspectMode: HeroAspectModePreset;
   brandTextColor: string;
   brandFontSize: string;
   nameTextColor: string;
@@ -311,20 +501,27 @@ export type FlexStyleTokens = {
   bodyLineHeight: string;
 };
 
-export const buildFlexStyleTokens = (config: CardConfig): FlexStyleTokens => ({
-  brandTextColor: getResolvedCardStyleValue(config.styles, 'brandTextColor', 'flex'),
-  brandFontSize: getResolvedCardStyleValue(config.styles, 'brandFontSize', 'flex'),
-  nameTextColor: getResolvedCardStyleValue(config.styles, 'nameTextColor', 'flex'),
-  nameFontSize: getResolvedCardStyleValue(config.styles, 'nameFontSize', 'flex'),
-  titleTextColor: getResolvedCardStyleValue(config.styles, 'titleTextColor', 'flex'),
-  titleFontSize: getResolvedCardStyleValue(config.styles, 'titleFontSize', 'flex'),
-  subtitleTextColor: getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'flex'),
-  subtitleFontSize: getResolvedCardStyleValue(config.styles, 'subtitleFontSize', 'flex'),
-  introTextColor: getResolvedCardStyleValue(config.styles, 'introTextColor', 'flex'),
-  introFontSize: getResolvedCardStyleValue(config.styles, 'introFontSize', 'flex'),
-  primaryButtonBackgroundColor: getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'flex'),
-  primaryButtonTextColor: getResolvedCardStyleValue(config.styles, 'primaryButtonTextColor', 'flex'),
-  sectionGap: getResolvedCardStyleValue(config.styles, 'sectionGap', 'flex'),
-  titleSubtitleGap: getResolvedCardStyleValue(config.styles, 'flexTitleSubtitleGap', 'flex'),
-  bodyLineHeight: getResolvedCardStyleValue(config.styles, 'flexBodyLineHeight', 'flex'),
-});
+export const buildFlexStyleTokens = (config: CardConfig): FlexStyleTokens => {
+  const heroTokens = buildCardHeroStyleTokens(config.styles);
+
+  return {
+    bubbleSize: heroTokens.bubbleSize,
+    heroAspectRatio: heroTokens.flexAspectRatio,
+    heroAspectMode: heroTokens.aspectMode,
+    brandTextColor: getResolvedCardStyleValue(config.styles, 'brandTextColor', 'flex'),
+    brandFontSize: getResolvedCardStyleValue(config.styles, 'brandFontSize', 'flex'),
+    nameTextColor: getResolvedCardStyleValue(config.styles, 'nameTextColor', 'flex'),
+    nameFontSize: getResolvedCardStyleValue(config.styles, 'nameFontSize', 'flex'),
+    titleTextColor: getResolvedCardStyleValue(config.styles, 'titleTextColor', 'flex'),
+    titleFontSize: getResolvedCardStyleValue(config.styles, 'titleFontSize', 'flex'),
+    subtitleTextColor: getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'flex'),
+    subtitleFontSize: getResolvedCardStyleValue(config.styles, 'subtitleFontSize', 'flex'),
+    introTextColor: getResolvedCardStyleValue(config.styles, 'introTextColor', 'flex'),
+    introFontSize: getResolvedCardStyleValue(config.styles, 'introFontSize', 'flex'),
+    primaryButtonBackgroundColor: getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'flex'),
+    primaryButtonTextColor: getResolvedCardStyleValue(config.styles, 'primaryButtonTextColor', 'flex'),
+    sectionGap: getResolvedCardStyleValue(config.styles, 'sectionGap', 'flex'),
+    titleSubtitleGap: getResolvedCardStyleValue(config.styles, 'flexTitleSubtitleGap', 'flex'),
+    bodyLineHeight: getResolvedCardStyleValue(config.styles, 'flexBodyLineHeight', 'flex'),
+  };
+};

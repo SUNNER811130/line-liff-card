@@ -23,7 +23,7 @@
 - `src/lib/card-field-registry.ts`
   admin 欄位 registry。定義每個 runtime key 在 admin 的分組、標籤、說明、可編輯性。
 - `src/lib/card-style-registry.ts`
-  集中管理 Flex 與 `/card/default/` 共用的 style key、預設值、作用範圍與 fallback token。
+  集中管理 Flex 與 `/card/default/` 共用的 style key、預設值、作用範圍與 fallback token；hero 比例 / mode / bubble size / zoom / focal 也從這裡解析。
 - `src/lib/card-validation.ts`
   admin save 前驗證規則。
 - `src/content/cards/*`
@@ -101,6 +101,10 @@
   - `actions[1].url`
   - `slug`，用來組第三顆 forward-share 按鈕
 - hero image 使用 `toAssetUrl(config.photo.src)`
+- hero 版型設定由 `buildFlexStyleTokens()` 解析：
+  - `styles.heroAspectRatio` -> `hero.aspectRatio`
+  - `styles.heroAspectMode` -> `hero.aspectMode`
+  - `styles.flexBubbleSize` -> `bubble.size`
 - footer 第一、二顆按鈕 URL 用 `resolveActionUrl(action.url, pageUrl)`
 - footer 第三顆按鈕固定文案 `分享這張電子名片`，URL 來自 `buildFlexForwardShareUrl(config.slug)`
 
@@ -125,6 +129,15 @@
   - `intro` 同時進 web UI 與 Flex 內文。
 - `photo.src`
   - 前台主視覺與 Flex hero 共用。
+- `styles.heroAspectRatio`
+  - 設定時同時影響 `/card/default/` 與 Flex hero 容器比例。
+  - 空值時，網頁維持目前正式版高度行為；Flex fallback `4:3`。
+- `styles.heroAspectMode`
+  - 同時影響 `/card/default/` 與 Flex hero 的 `cover` / `contain`。
+- `styles.flexBubbleSize`
+  - 只影響 Flex bubble size，空值 fallback `mega`。
+- `styles.heroZoom` / `styles.heroFocalX` / `styles.heroFocalY`
+  - 目前只影響 `/card/default/` 與 admin 主視覺預覽，不改原圖與 upload contract。
 - `photo.alt`
   - 只影響 web `<img alt>` 與 admin preview。
 - `photo.link`
@@ -143,7 +156,7 @@
 ## 6. 核心檔案責任
 
 - `src/components/AdminPage.tsx`
-  UI、local draft、session restore、remote load/save/upload orchestration。
+  UI、local draft、session restore、remote load/save/upload orchestration，以及 hero 圖片控制欄位與主視覺 / Flex 預覽。
 - `src/components/admin-page-helpers.ts`
   AdminPage 純函式：draft 正規化、欄位錯誤、session label、upload 後 draft patch。
 - `src/lib/card-source.ts`
@@ -151,11 +164,11 @@
 - `src/lib/card-admin-api.ts`
   POST header、GET URL、error envelope、config envelope 解析。
 - `src/lib/share.ts`
-  Flex payload 與 share fallback 順序。
+  Flex payload 與 share fallback 順序；hero image / bubble size 實際組裝點在這裡。
 - `src/lib/liff.ts`
   LIFF SDK 載入與 endpoint 邊界檢查。
 - `src/content/cards/view-model.ts`
-  CardConfig -> CardPageViewModel 純映射。
+  CardConfig -> CardPageViewModel 純映射，網頁主視覺仍由 `photo.src` 進入 CardPage。
 - `src/lib/card-actions.ts`
   前台前兩顆 CTA 與第三顆 share button 組裝。
 - `gas/bound-card-backend/Code.gs`
@@ -166,7 +179,7 @@
 較適合擴充：
 
 - `src/lib/card-field-registry.ts`
-  新增 admin 欄位顯示規則時優先從這裡掛。
+  新增 admin 欄位顯示規則時優先從這裡掛；圖片版型控制欄位已掛在 `assets` group。
 - `src/content/cards/view-model.ts`
   新增純 UI 映射可先放這層。
 - `src/lib/card-actions.ts`

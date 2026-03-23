@@ -154,6 +154,40 @@ describe('AdminPage', () => {
     });
   });
 
+  it('writes hero layout controls into the save payload while keeping the preview controls editable', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText('Hero 比例 preset'), '20:13');
+    await user.selectOptions(screen.getByLabelText('Hero 顯示模式'), 'contain');
+    await user.selectOptions(screen.getByLabelText('Flex Bubble 尺寸'), 'giga');
+    fireEvent.change(screen.getByLabelText('圖片縮放'), { target: { value: '135' } });
+    fireEvent.change(screen.getByLabelText('圖片焦點水平'), { target: { value: '-20' } });
+    fireEvent.change(screen.getByLabelText('圖片焦點垂直'), { target: { value: '40' } });
+    await user.click(screen.getByRole('button', { name: '儲存正式名片' }));
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"saveCard"'));
+      const body = String(saveCall?.[1]?.body || '');
+      expect(body).toContain('"heroAspectRatio":"20:13"');
+      expect(body).toContain('"heroAspectMode":"contain"');
+      expect(body).toContain('"flexBubbleSize":"giga"');
+      expect(body).toContain('"heroZoom":"135"');
+      expect(body).toContain('"heroFocalX":"-20"');
+      expect(body).toContain('"heroFocalY":"40"');
+    });
+  });
+
   it('keeps the CMS locked until an admin session exists', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     vi.stubGlobal('fetch', buildFetchMock());
@@ -346,9 +380,13 @@ describe('AdminPage', () => {
 
     await user.clear(screen.getByLabelText('OG Image URL'));
 
-    const previewImages = Array.from(container.querySelectorAll('.admin-image-preview')) as HTMLImageElement[];
-    expect(previewImages[0]?.src).toBe('https://drive.google.com/thumbnail?id=drive-photo-123&sz=w2000');
-    expect(previewImages[1]?.src).toBe('https://drive.google.com/thumbnail?id=drive-photo-123&sz=w2000');
+    const heroPreview = container.querySelector('.admin-hero-preview-image') as HTMLImageElement | null;
+    const flexPreview = container.querySelector('.admin-flex-preview-hero-image') as HTMLImageElement | null;
+    const sharePreview = container.querySelector('.admin-image-preview') as HTMLImageElement | null;
+
+    expect(heroPreview?.src).toBe('https://drive.google.com/thumbnail?id=drive-photo-123&sz=w2000');
+    expect(flexPreview?.src).toBe('https://drive.google.com/thumbnail?id=drive-photo-123&sz=w2000');
+    expect(sharePreview?.src).toBe('https://drive.google.com/thumbnail?id=drive-photo-123&sz=w2000');
     expect(screen.getByText(/預覽來源：photo\.src fallback/)).toBeInTheDocument();
   });
 

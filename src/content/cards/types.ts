@@ -51,6 +51,12 @@ export type CardStylesConfig = {
   cardPadding?: string;
   flexTitleSubtitleGap?: string;
   flexBodyLineHeight?: string;
+  heroAspectRatio?: string;
+  heroAspectMode?: string;
+  flexBubbleSize?: string;
+  heroZoom?: string;
+  heroFocalX?: string;
+  heroFocalY?: string;
 };
 
 export type CardShareConfig = {

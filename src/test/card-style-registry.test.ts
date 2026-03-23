@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { cloneCardConfig } from '../content/cards/draft';
 import { defaultCard } from '../content/cards/default';
 import {
+  buildCardHeroStyleTokens,
   buildCardWebStyleVariables,
   buildFlexStyleTokens,
+  FLEX_BUBBLE_SIZE,
   FLEX_HERO_IMAGE_ASPECT_RATIO,
   FLEX_HERO_IMAGE_ASPECT_MODE,
   FLEX_HERO_IMAGE_SIZE,
@@ -56,12 +58,14 @@ describe('card style registry', () => {
     expect(FLEX_HERO_IMAGE_SIZE).toBe('full');
     expect(FLEX_HERO_IMAGE_ASPECT_RATIO).toBe('4:3');
     expect(FLEX_HERO_IMAGE_ASPECT_MODE).toBe('cover');
+    expect(FLEX_BUBBLE_SIZE).toBe('mega');
     expect(message.contents.hero).toMatchObject({
       url: 'https://cdn.example.test/shared-hero.jpg',
       size: 'full',
       aspectRatio: '4:3',
       aspectMode: 'cover',
     });
+    expect(message.contents.size).toBe('mega');
   });
 
   it('applies configured style tokens to both web variables and flex output', () => {
@@ -104,6 +108,56 @@ describe('card style registry', () => {
       color: '#334455',
       lineSpacing: '6px',
       margin: '20px',
+    });
+  });
+
+  it('falls back hero layout keys to the current production defaults when absent or blank', () => {
+    const config = cloneCardConfig(defaultCard);
+    config.styles = {
+      ...config.styles,
+      heroAspectRatio: '',
+      heroAspectMode: '',
+      flexBubbleSize: '',
+      heroZoom: '',
+      heroFocalX: '',
+      heroFocalY: '',
+    };
+
+    expect(buildCardHeroStyleTokens(config.styles)).toMatchObject({
+      webAspectRatio: 'auto',
+      flexAspectRatio: '4:3',
+      aspectMode: 'cover',
+      bubbleSize: 'mega',
+      zoomPercent: 100,
+      focalX: 0,
+      focalY: 0,
+      objectPosition: '50.00% 50.00%',
+    });
+  });
+
+  it('maps configured hero controls into web variables and flex tokens', () => {
+    const config = cloneCardConfig(defaultCard);
+    config.styles = {
+      ...config.styles,
+      heroAspectRatio: '20:13',
+      heroAspectMode: 'contain',
+      flexBubbleSize: 'giga',
+      heroZoom: '135',
+      heroFocalX: '-20',
+      heroFocalY: '40',
+    };
+
+    expect(buildCardWebStyleVariables(config)).toMatchObject({
+      '--card-hero-aspect-ratio': '20 / 13',
+      '--card-hero-object-fit': 'contain',
+      '--card-hero-scale': '1.35',
+      '--card-hero-object-position': '40.00% 70.00%',
+    });
+
+    expect(buildFlexStyleTokens(config)).toMatchObject({
+      bubbleSize: 'giga',
+      heroAspectRatio: '20:13',
+      heroAspectMode: 'contain',
     });
   });
 });

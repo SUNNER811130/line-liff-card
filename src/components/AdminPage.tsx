@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type ReactNode } from 'react';
 import { CardPage } from './CardPage';
 import {
   ADMIN_DESCRIPTION,
@@ -50,6 +50,11 @@ import {
   type FieldVisibilityScope,
 } from '../lib/card-field-registry';
 import {
+  buildFlexMessage,
+} from '../lib/share';
+import {
+  buildCardHeroStyleTokens,
+  FLEX_BUBBLE_SIZE_OPTIONS,
   FLEX_HERO_IMAGE_ASPECT_RATIO,
   FLEX_HERO_IMAGE_MIN_HEIGHT,
   FLEX_HERO_IMAGE_MIN_WIDTH,
@@ -57,6 +62,8 @@ import {
   FLEX_HERO_IMAGE_RECOMMENDED_WIDTH,
   getCardStyleInputValue,
   getResolvedCardStyleValue,
+  HERO_ASPECT_MODE_OPTIONS,
+  HERO_ASPECT_RATIO_OPTIONS,
 } from '../lib/card-style-registry';
 import { getPreviewAssetUrl } from '../lib/runtime';
 
@@ -118,6 +125,9 @@ const visibilityScopeLabel: Record<FieldVisibilityScope, string> = {
 };
 
 const actionToneOptions: CardActionTone[] = ['primary', 'secondary'];
+const heroAspectRatioOptions = [...HERO_ASPECT_RATIO_OPTIONS];
+const heroAspectModeOptions = [...HERO_ASPECT_MODE_OPTIONS];
+const flexBubbleSizeOptions = [...FLEX_BUBBLE_SIZE_OPTIONS];
 
 const openExternalUrl = (url: string) => {
   window.open(url, '_blank', 'noopener,noreferrer');
@@ -144,6 +154,29 @@ const normalizeColorPickerValue = (value: string): string => {
   }
 
   return expandShortHexColor(value).toLowerCase();
+};
+
+const resolvePreviewImageSource = (primaryUrl: string, fallbackUrl?: string) => {
+  const primaryPreviewable = isImagePreviewable(primaryUrl);
+  const fallbackPreviewable = fallbackUrl ? isImagePreviewable(fallbackUrl) : false;
+  const selectedUrl = primaryPreviewable ? primaryUrl : fallbackPreviewable ? fallbackUrl ?? '' : '';
+  const normalizedUrl = selectedUrl ? getPreviewAssetUrl(selectedUrl) : '';
+
+  return {
+    primaryPreviewable,
+    fallbackPreviewable,
+    selectedUrl,
+    normalizedUrl,
+  };
+};
+
+const clampSliderValue = (value: string, fallback: number, min: number, max: number): string => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return String(fallback);
+  }
+
+  return String(Math.min(max, Math.max(min, parsed)));
 };
 
 const getColorFieldFallbackValue = (
@@ -250,6 +283,19 @@ type AdminPreviewImageCardProps = {
   fallbackLabel?: string;
 };
 
+type AdminHeroPreviewCardProps = {
+  title: string;
+  primaryUrl: string;
+  fallbackUrl?: string;
+  alt: string;
+  emptyMessage: string;
+  fallbackMessage: string;
+  sourceLabel: string;
+  fallbackLabel?: string;
+  previewStyle: CSSProperties;
+  previewFootnote: string;
+};
+
 function AdminPreviewImageCard({
   title,
   primaryUrl,
@@ -260,11 +306,8 @@ function AdminPreviewImageCard({
   sourceLabel,
   fallbackLabel,
 }: AdminPreviewImageCardProps) {
-  const primaryPreviewable = isImagePreviewable(primaryUrl);
-  const fallbackPreviewable = fallbackUrl ? isImagePreviewable(fallbackUrl) : false;
-  const selectedUrl = primaryPreviewable ? primaryUrl : fallbackPreviewable ? fallbackUrl ?? '' : '';
+  const { primaryPreviewable, fallbackPreviewable, selectedUrl, normalizedUrl } = resolvePreviewImageSource(primaryUrl, fallbackUrl);
   const selectedLabel = primaryPreviewable ? sourceLabel : fallbackPreviewable ? fallbackLabel ?? sourceLabel : '';
-  const normalizedUrl = selectedUrl ? getPreviewAssetUrl(selectedUrl) : '';
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -289,6 +332,122 @@ function AdminPreviewImageCard({
           {selectedLabel ? <p className="support-copy">預期來源：{selectedLabel}</p> : null}
         </div>
       )}
+    </div>
+  );
+}
+
+function AdminHeroPreviewCard({
+  title,
+  primaryUrl,
+  fallbackUrl,
+  alt,
+  emptyMessage,
+  fallbackMessage,
+  sourceLabel,
+  fallbackLabel,
+  previewStyle,
+  previewFootnote,
+}: AdminHeroPreviewCardProps) {
+  const { primaryPreviewable, fallbackPreviewable, selectedUrl, normalizedUrl } = resolvePreviewImageSource(primaryUrl, fallbackUrl);
+  const selectedLabel = primaryPreviewable ? sourceLabel : fallbackPreviewable ? fallbackLabel ?? sourceLabel : '';
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [normalizedUrl]);
+
+  return (
+    <div className="admin-image-preview-card">
+      <p className="section-label">{title}</p>
+      {normalizedUrl && !loadFailed ? (
+        <>
+          <div className="admin-hero-preview-frame" style={previewStyle}>
+            <img
+              src={normalizedUrl}
+              alt={alt}
+              className="admin-hero-preview-image"
+              onError={() => setLoadFailed(true)}
+            />
+          </div>
+          <p className="support-copy">{previewFootnote}</p>
+          <p className="support-copy">
+            預覽來源：{selectedLabel}
+            {selectedUrl !== normalizedUrl ? '（已做預覽正規化）' : ''}
+          </p>
+        </>
+      ) : (
+        <div className="admin-image-preview-fallback" role="status">
+          <strong>{normalizedUrl ? '圖片載入失敗' : '目前沒有可預覽圖片'}</strong>
+          <p className="support-copy">{normalizedUrl ? fallbackMessage : emptyMessage}</p>
+          {selectedLabel ? <p className="support-copy">預期來源：{selectedLabel}</p> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminFlexPreviewCard({ config }: { config: CardConfig }) {
+  const flexMessage = buildFlexMessage(config, 'https://example.test/share', 'https://example.test/card/default/');
+  const heroUrl = flexMessage.contents.hero.url;
+  const heroPreviewUrl = getPreviewAssetUrl(heroUrl);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [heroPreviewUrl]);
+
+  return (
+    <div className="admin-image-preview-card">
+      <p className="section-label">Flex 預覽</p>
+      <div className={`admin-flex-preview admin-flex-preview-${flexMessage.contents.size ?? 'mega'}`}>
+        {heroPreviewUrl && !loadFailed ? (
+          <div
+            className={`admin-flex-preview-hero admin-flex-preview-hero-${flexMessage.contents.hero.aspectMode}`}
+            style={{ aspectRatio: flexMessage.contents.hero.aspectRatio.replace(':', ' / ') }}
+          >
+            <img
+              src={heroPreviewUrl}
+              alt={config.photo.alt}
+              className="admin-flex-preview-hero-image"
+              onError={() => setLoadFailed(true)}
+            />
+          </div>
+        ) : (
+          <div className="admin-image-preview-fallback" role="status">
+            <strong>{heroPreviewUrl ? '圖片載入失敗' : '目前沒有可預覽圖片'}</strong>
+            <p className="support-copy">{heroPreviewUrl ? '請確認主視覺圖片可公開讀取。' : '請先提供 photo.src。'}</p>
+          </div>
+        )}
+        <div className="admin-flex-preview-body">
+          {flexMessage.contents.body.contents.map((item, index) =>
+            'text' in item ? (
+              <p
+                key={`${item.text}-${index}`}
+                className={`admin-flex-preview-text admin-flex-preview-text-${index}`}
+                style={{
+                  color: item.color,
+                  marginTop: index === 0 ? '0' : item.margin ?? '6px',
+                  fontSize: item.size,
+                  fontWeight: item.weight === 'bold' ? 700 : 500,
+                }}
+              >
+                {item.text}
+              </p>
+            ) : null,
+          )}
+        </div>
+        <div className="admin-flex-preview-footer">
+          {flexMessage.contents.footer.contents.map((item, index) => (
+            <div key={`${item.action.label}-${index}`} className={`admin-flex-preview-button admin-flex-preview-button-${item.style}`}>
+              {item.action.label}
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="support-copy">
+        即時反映 Flex hero 比例、cover/contain 與 bubble 尺寸。縮放與焦點目前保留給網頁主視覺顯示控制。
+      </p>
+      <p className="support-copy">實際 share payload 仍由同一個 `buildFlexMessage()` 組裝，不另走 preview 專用路徑。</p>
     </div>
   );
 }
@@ -406,6 +565,52 @@ function AdminSelectField({
   );
 }
 
+function AdminRangeField({
+  label,
+  value,
+  onChange,
+  helpText,
+  badgeLabel,
+  min,
+  max,
+  step = 1,
+  marks,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  helpText: string;
+  badgeLabel: string;
+  min: number;
+  max: number;
+  step?: number;
+  marks: [string, string, string];
+}) {
+  return (
+    <label className="admin-field">
+      <span>
+        <span>{label}</span>
+        <span className="admin-visibility-badge">{badgeLabel}</span>
+      </span>
+      <div className="admin-range-shell">
+        <div className="admin-range-meta">
+          <strong>{value}</strong>
+          <small>
+            範圍 {min} ~ {max}
+          </small>
+        </div>
+        <input aria-label={label} type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(event.target.value)} />
+        <div className="admin-range-marks" aria-hidden="true">
+          <span>{marks[0]}</span>
+          <span>{marks[1]}</span>
+          <span>{marks[2]}</span>
+        </div>
+      </div>
+      <small className="admin-field-description">{helpText}</small>
+    </label>
+  );
+}
+
 function StatusBanner({ status }: { status: StatusMessage | AssetUploadState | null }) {
   if (!status) {
     return null;
@@ -476,6 +681,16 @@ export function AdminPage() {
   const latestSaveLabel = [lastSavedAt ? `最近成功儲存：${lastSavedAt}` : '', lastSavedBy ? `儲存者：${lastSavedBy}` : '']
     .filter(Boolean)
     .join('｜');
+  const heroStyleTokens = useMemo(() => buildCardHeroStyleTokens(draft.styles), [draft.styles]);
+  const heroPreviewStyle = useMemo<CSSProperties>(
+    () => ({
+      '--card-hero-aspect-ratio': heroStyleTokens.webAspectRatio,
+      '--card-hero-object-fit': heroStyleTokens.aspectMode,
+      '--card-hero-scale': String(heroStyleTokens.zoomScale),
+      '--card-hero-object-position': heroStyleTokens.objectPosition,
+    }) as CSSProperties,
+    [heroStyleTokens],
+  );
 
   useEffect(() => {
     applyBasicSeo(ADMIN_TITLE, ADMIN_DESCRIPTION);
@@ -771,6 +986,84 @@ export function AdminPage() {
             ),
           },
         );
+      case 'styles.heroAspectRatio':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'heroAspectRatio') || FLEX_HERO_IMAGE_ASPECT_RATIO}
+            onChange={(value) => updateStyle('heroAspectRatio', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={heroAspectRatioOptions}
+          />
+        );
+      case 'styles.heroAspectMode':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'heroAspectMode') || 'cover'}
+            onChange={(value) => updateStyle('heroAspectMode', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={heroAspectModeOptions}
+          />
+        );
+      case 'styles.flexBubbleSize':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'flexBubbleSize') || 'mega'}
+            onChange={(value) => updateStyle('flexBubbleSize', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={flexBubbleSizeOptions}
+          />
+        );
+      case 'styles.heroZoom':
+        return (
+          <AdminRangeField
+            key={field.key}
+            label={field.label}
+            value={clampSliderValue(getCardStyleInputValue(draft.styles, 'heroZoom') || '100', 100, 50, 150)}
+            onChange={(value) => updateStyle('heroZoom', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            min={50}
+            max={150}
+            marks={['50%', '100%', '150%']}
+          />
+        );
+      case 'styles.heroFocalX':
+        return (
+          <AdminRangeField
+            key={field.key}
+            label={field.label}
+            value={clampSliderValue(getCardStyleInputValue(draft.styles, 'heroFocalX') || '0', 0, -100, 100)}
+            onChange={(value) => updateStyle('heroFocalX', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            min={-100}
+            max={100}
+            marks={['左', '中', '右']}
+          />
+        );
+      case 'styles.heroFocalY':
+        return (
+          <AdminRangeField
+            key={field.key}
+            label={field.label}
+            value={clampSliderValue(getCardStyleInputValue(draft.styles, 'heroFocalY') || '0', 0, -100, 100)}
+            onChange={(value) => updateStyle('heroFocalY', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            min={-100}
+            max={100}
+            marks={['上', '中', '下']}
+          />
+        );
       case 'photo.alt':
         return renderTextField(field, draft.photo.alt, (value) =>
           patchDraft((current) => ({ ...current, photo: { ...current.photo, alt: value } })),
@@ -989,17 +1282,25 @@ export function AdminPage() {
               <p className="support-copy">
                 最低建議：{FLEX_HERO_IMAGE_MIN_WIDTH} × {FLEX_HERO_IMAGE_MIN_HEIGHT}。主體請置中並保留四周安全留白。
               </p>
-              <p className="support-copy">此圖會同時用於 `/card/default/` 與 LINE Flex hero，Flex 端會以 cover 方式裁切。</p>
+              <p className="support-copy">這裡調整的是顯示方式，不是改原圖。`Hero 比例` 與 `Hero 模式` 會影響 Flex 與網頁；`Flex Bubble 尺寸` 只影響 Flex；縮放與焦點目前只影響網頁主視覺。</p>
+            </div>
+            <div className="admin-info-card">
+              <p className="section-label">目前設定摘要</p>
+              <p className="support-copy">Hero 比例：{heroStyleTokens.flexAspectRatio}｜Hero 模式：{heroStyleTokens.aspectMode}｜Flex Bubble：{heroStyleTokens.bubbleSize}</p>
+              <p className="support-copy">網頁縮放：{heroStyleTokens.zoomPercent}%｜焦點：X {heroStyleTokens.focalX} / Y {heroStyleTokens.focalY}</p>
             </div>
             <div className="admin-image-preview-grid">
-              <AdminPreviewImageCard
+              <AdminHeroPreviewCard
                 title="主視覺預覽"
                 primaryUrl={draft.photo.src}
                 alt={draft.photo.alt}
                 emptyMessage="請提供可公開存取的正式圖片 URL。"
                 fallbackMessage="請確認圖片已公開，或改用可直接顯示的正式圖片 URL。"
                 sourceLabel="photo.src"
+                previewStyle={heroPreviewStyle}
+                previewFootnote="即時反映 `/card/default/` 主視覺比例、cover/contain、縮放與焦點設定。"
               />
+              <AdminFlexPreviewCard config={draft} />
               <AdminPreviewImageCard
                 title="分享圖預覽"
                 primaryUrl={draft.seo.ogImage}

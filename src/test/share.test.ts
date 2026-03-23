@@ -26,6 +26,7 @@ describe('share helpers', () => {
       aspectRatio: '4:3',
       aspectMode: 'cover',
     });
+    expect(message.contents.size).toBe('mega');
     expect(buttons[2]).toMatchObject({
       type: 'button',
       style: 'link',
@@ -173,5 +174,34 @@ describe('share helpers', () => {
 
     expect(message.contents.body.contents).toHaveLength(4);
     expect(message.contents.body.contents.some((item) => 'text' in item && item.text === '   ')).toBe(false);
+  });
+
+  it('applies configured hero ratio, mode, and bubble size to the flex payload', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    const runtimeConfig = cloneCardConfig(defaultCard);
+    runtimeConfig.styles = {
+      ...runtimeConfig.styles,
+      heroAspectRatio: '1:1',
+      heroAspectMode: 'contain',
+      flexBubbleSize: 'giga',
+      heroZoom: '140',
+      heroFocalX: '25',
+      heroFocalY: '-10',
+    };
+    const { buildFlexMessage } = await import('../lib/share');
+
+    const message = buildFlexMessage(
+      runtimeConfig,
+      'https://liff.line.me/mock-permalink',
+      'https://example.test/card/default/',
+    );
+
+    expect(message.contents).toMatchObject({
+      size: 'giga',
+    });
+    expect(message.contents.hero).toMatchObject({
+      aspectRatio: '1:1',
+      aspectMode: 'contain',
+    });
   });
 });

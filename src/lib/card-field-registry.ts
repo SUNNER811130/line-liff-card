@@ -236,6 +236,60 @@ const cardRuntimeFieldRegistrySource = [
     kind: 'boolean',
   },
   {
+    key: 'styles.heroAspectRatio',
+    label: 'Hero 比例 preset',
+    group: 'assets',
+    visibilityScope: 'both',
+    helpText: '調整主視覺顯示比例，不會改原圖。未設定時 Flex 維持 4:3，網頁維持目前正式版高度行為。',
+    isEditable: true,
+    sortOrder: 180,
+  },
+  {
+    key: 'styles.heroAspectMode',
+    label: 'Hero 顯示模式',
+    group: 'assets',
+    visibilityScope: 'both',
+    helpText: '選擇 cover 或 contain。這是在調整顯示方式，不會改原圖內容。',
+    isEditable: true,
+    sortOrder: 190,
+  },
+  {
+    key: 'styles.flexBubbleSize',
+    label: 'Flex Bubble 尺寸',
+    group: 'assets',
+    visibilityScope: 'flex',
+    helpText: '只影響 LINE 分享 Flex bubble 外框尺寸。未設定時沿用目前正式版預設尺寸。',
+    isEditable: true,
+    sortOrder: 200,
+  },
+  {
+    key: 'styles.heroZoom',
+    label: '圖片縮放',
+    group: 'assets',
+    visibilityScope: 'web',
+    helpText: '50% 到 150%。只調整 `/card/default/` 與 admin 主視覺預覽的裁切縮放，不會重算圖片檔。',
+    isEditable: true,
+    sortOrder: 205,
+  },
+  {
+    key: 'styles.heroFocalX',
+    label: '圖片焦點水平',
+    group: 'assets',
+    visibilityScope: 'web',
+    helpText: '控制主體偏左、置中或偏右。只影響網頁主視覺預覽與正式頁。',
+    isEditable: true,
+    sortOrder: 206,
+  },
+  {
+    key: 'styles.heroFocalY',
+    label: '圖片焦點垂直',
+    group: 'assets',
+    visibilityScope: 'web',
+    helpText: '控制主體偏上、置中或偏下。只影響網頁主視覺預覽與正式頁。',
+    isEditable: true,
+    sortOrder: 207,
+  },
+  {
     key: 'photo.src',
     label: '正式圖片 URL',
     group: 'assets',
@@ -499,7 +553,11 @@ const cardRuntimeFieldRegistrySource = [
     sortOrder: 680,
     kind: 'readonly',
   },
-  ...CARD_STYLE_REGISTRY.filter((styleField) => styleField.key !== 'subheadlineFontSize').map(
+  ...CARD_STYLE_REGISTRY.filter(
+    (styleField) =>
+      styleField.key !== 'subheadlineFontSize' &&
+      !['heroAspectRatio', 'heroAspectMode', 'flexBubbleSize', 'heroZoom', 'heroFocalX', 'heroFocalY'].includes(styleField.key),
+  ).map(
     (styleField, index) =>
       ({
         key: `styles.${styleField.key}`,

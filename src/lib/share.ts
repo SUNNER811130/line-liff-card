@@ -4,8 +4,6 @@ import { navigateToUrl, resolveActionUrl, toAssetUrl } from './runtime';
 import { getCardLiffUrl } from './routes';
 import {
   buildFlexStyleTokens,
-  FLEX_HERO_IMAGE_ASPECT_MODE,
-  FLEX_HERO_IMAGE_ASPECT_RATIO,
   FLEX_HERO_IMAGE_SIZE,
 } from './card-style-registry';
 
@@ -152,12 +150,13 @@ export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: 
     altText: `${config.content.fullName}｜${config.content.brandName}`,
     contents: {
       type: 'bubble' as const,
+      size: styleTokens.bubbleSize,
       hero: {
         type: 'image' as const,
         url: toAssetUrl(config.photo.src),
         size: FLEX_HERO_IMAGE_SIZE as 'full',
-        aspectRatio: FLEX_HERO_IMAGE_ASPECT_RATIO as '4:3',
-        aspectMode: FLEX_HERO_IMAGE_ASPECT_MODE as 'cover',
+        aspectRatio: styleTokens.heroAspectRatio,
+        aspectMode: styleTokens.heroAspectMode,
         action: {
           type: 'uri' as const,
           label: config.content.fullName,

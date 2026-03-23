@@ -1,6 +1,6 @@
 {
-  "scriptId": "1jvSWmvqyfI7MGSVy5kILCHHx5q2Mhrdgu3Z2FwpS-QRGhXLre2B0tls",
-  "rootDir": "gas/card-admin-webapp",
+  "scriptId": "1NwHO8OyIvv6QZcyjRXCeG_hoxCw8Y4SJU8D9sQIHwk7Mi5JF14JmLLya",
+  "rootDir": "gas/bound-card-backend",
   "scriptExtensions": [
     ".js",
     ".gs"

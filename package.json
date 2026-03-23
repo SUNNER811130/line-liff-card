@@ -14,6 +14,12 @@
     "gas:deploy": "node ./scripts/print-bound-gas-setup.mjs --deploy",
     "gas:check": "bash ./scripts/check-runtime-backend.sh",
     "gas:check:admin": "node ./scripts/check-runtime-admin.mjs",
+    "gas:inspect:prod": "node ./scripts/inspect-production-gas.mjs",
+    "gas:push:prod": "node ./scripts/push-production-gas.mjs",
+    "gas:version:prod": "node ./scripts/create-production-gas-version.mjs",
+    "gas:update-deployment:prod": "node ./scripts/update-production-gas-deployment.mjs",
+    "gas:verify:prod": "node ./scripts/verify-production-gas.mjs",
+    "gas:release:prod": "node ./scripts/release-production-gas.mjs",
     "test": "vitest run",
     "lint": "eslint ."
   },

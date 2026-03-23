@@ -519,7 +519,7 @@ function decodeWebSafeString_(value) {
 }
 
 function buildDrivePublicUrl_(fileId) {
-  return 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(fileId);
+  return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fileId) + '&sz=w2000';
 }
 
 function buildDriveDownloadUrl_(fileId) {

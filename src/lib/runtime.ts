@@ -45,6 +45,34 @@ export const navigateToUrl = (targetUrl: string) => {
   window.location.assign(targetUrl);
 };
 
+const GOOGLE_DRIVE_THUMBNAIL_SIZE = 'w2000';
+
+const normalizeGoogleDriveAssetUrl = (assetUrl: string): string => {
+  try {
+    const url = new URL(assetUrl);
+    if (url.hostname !== 'drive.google.com') {
+      return assetUrl;
+    }
+
+    let fileId = url.searchParams.get('id')?.trim() ?? '';
+    if (!fileId) {
+      const fileMatch = url.pathname.match(/\/file\/d\/([^/]+)/);
+      fileId = fileMatch?.[1]?.trim() ?? '';
+    }
+
+    if (!fileId) {
+      return assetUrl;
+    }
+
+    const normalized = new URL('https://drive.google.com/thumbnail');
+    normalized.searchParams.set('id', fileId);
+    normalized.searchParams.set('sz', GOOGLE_DRIVE_THUMBNAIL_SIZE);
+    return normalized.toString();
+  } catch {
+    return assetUrl;
+  }
+};
+
 export const resolveActionUrl = (value: string, fallbackUrl: string): string => {
   if (isPlaceholderValue(value)) {
     return fallbackUrl;
@@ -59,7 +87,7 @@ export const resolveActionUrl = (value: string, fallbackUrl: string): string => 
 
 export const toAssetUrl = (assetPath: string): string => {
   if (/^(https?:)?\/\//.test(assetPath)) {
-    return assetPath;
+    return normalizeGoogleDriveAssetUrl(assetPath);
   }
 
   const normalizedAssetPath = assetPath.replace(/^\/+/, '');

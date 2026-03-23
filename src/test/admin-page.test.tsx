@@ -50,7 +50,7 @@ const buildFetchMock = (remoteConfig?: typeof defaultCard) =>
         return createJsonResponse({
           ok: true,
           fileId: 'drive-file-123',
-          publicUrl: 'https://drive.google.com/uc?export=view&id=drive-file-123',
+          publicUrl: 'https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000',
           viewUrl: 'https://drive.google.com/file/d/drive-file-123/view',
           downloadUrl: 'https://drive.google.com/uc?export=download&id=drive-file-123',
           updatedAt: '2026-03-22T11:00:00.000Z',
@@ -316,7 +316,7 @@ describe('AdminPage', () => {
     fireEvent.change(imageInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('https://drive.google.com/uc?export=view&id=drive-file-123')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000')).toBeInTheDocument();
       expect(screen.getByText(/圖片已上傳到 Google Drive，並同步寫入正式 photo\.src/)).toBeInTheDocument();
       expect(screen.getAllByText(/最近成功儲存：2026-03-22T11:00:00.000Z/).length).toBeGreaterThan(0);
     });
@@ -346,7 +346,7 @@ describe('AdminPage', () => {
     fireEvent.change(imageInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('https://drive.google.com/uc?export=view&id=drive-file-123')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000')).toBeInTheDocument();
       expect(screen.getByDisplayValue('尚未儲存的新姓名')).toBeInTheDocument();
       expect(screen.getByText('尚未儲存變更。重新整理或離開頁面前會提醒。')).toBeInTheDocument();
     });

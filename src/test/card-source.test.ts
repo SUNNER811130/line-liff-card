@@ -81,7 +81,7 @@ describe('card source adapter', () => {
       createJsonResponse({
         ok: true,
         fileId: 'drive-file-123',
-        publicUrl: 'https://drive.google.com/uc?export=view&id=drive-file-123',
+        publicUrl: 'https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000',
         viewUrl: 'https://drive.google.com/file/d/drive-file-123/view',
         downloadUrl: 'https://drive.google.com/uc?export=download&id=drive-file-123',
         updatedAt: '2026-03-22T11:00:00.000Z',
@@ -102,7 +102,7 @@ describe('card source adapter', () => {
       }),
     ).resolves.toEqual({
       fileId: 'drive-file-123',
-      publicUrl: 'https://drive.google.com/uc?export=view&id=drive-file-123',
+      publicUrl: 'https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000',
       viewUrl: 'https://drive.google.com/file/d/drive-file-123/view',
       downloadUrl: 'https://drive.google.com/uc?export=download&id=drive-file-123',
       updatedAt: '2026-03-22T11:00:00.000Z',

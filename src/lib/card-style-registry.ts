@@ -76,6 +76,24 @@ const cardStyleRegistry = [
     flexDefault: '14px',
   },
   {
+    key: 'subtitleTextColor',
+    label: '副標字色',
+    scope: 'both',
+    helpText: '影響卡片副標與 LINE Flex 副標的顯示顏色。未填時沿用預設樣式。',
+    placeholder: '#5d6a7d',
+    webDefault: 'var(--muted)',
+    flexDefault: '#5e6c81',
+  },
+  {
+    key: 'subtitleFontSize',
+    label: '副標字級',
+    scope: 'both',
+    helpText: '影響卡片副標與 LINE Flex 副標的字級。未填時沿用預設樣式。',
+    placeholder: '15',
+    webDefault: '1rem',
+    flexDefault: '13px',
+  },
+  {
     key: 'introTextColor',
     label: '內文字色',
     scope: 'both',
@@ -196,6 +214,20 @@ export const CARD_STYLE_REGISTRY_BY_KEY = Object.fromEntries(
 
 const trimStyleValue = (value: string | undefined): string => value?.trim() ?? '';
 
+const getResolvedSubtitleSizeValue = (styles: CardStylesConfig | undefined): string => {
+  const configuredSubtitleSize = trimStyleValue(styles?.subtitleFontSize);
+  if (configuredSubtitleSize) {
+    return getResolvedCardStyleValue(styles, 'subtitleFontSize', 'web');
+  }
+
+  const legacySubheadlineSize = trimStyleValue(styles?.subheadlineFontSize);
+  if (legacySubheadlineSize) {
+    return getResolvedCardStyleValue(styles, 'subheadlineFontSize', 'web');
+  }
+
+  return getResolvedCardStyleValue(styles, 'subtitleFontSize', 'web');
+};
+
 const normalizeLengthValue = (value: string): string => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -246,10 +278,12 @@ export const buildCardWebStyleVariables = (config: CardConfig): Record<string, s
   '--card-name-size': getResolvedCardStyleValue(config.styles, 'nameFontSize', 'web'),
   '--card-title-color': getResolvedCardStyleValue(config.styles, 'titleTextColor', 'web'),
   '--card-title-size': getResolvedCardStyleValue(config.styles, 'titleFontSize', 'web'),
+  '--card-subtitle-color': getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'web'),
+  '--card-subtitle-size': getResolvedSubtitleSizeValue(config.styles),
   '--card-intro-color': getResolvedCardStyleValue(config.styles, 'introTextColor', 'web'),
   '--card-intro-size': getResolvedCardStyleValue(config.styles, 'introFontSize', 'web'),
   '--card-headline-size': getResolvedCardStyleValue(config.styles, 'headlineFontSize', 'web'),
-  '--card-subheadline-size': getResolvedCardStyleValue(config.styles, 'subheadlineFontSize', 'web'),
+  '--card-subheadline-size': getResolvedSubtitleSizeValue(config.styles),
   '--card-primary-button-bg': getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'web'),
   '--card-primary-button-color': getResolvedCardStyleValue(config.styles, 'primaryButtonTextColor', 'web'),
   '--card-secondary-button-bg': getResolvedCardStyleValue(config.styles, 'secondaryButtonBackgroundColor', 'web'),
@@ -266,6 +300,8 @@ export type FlexStyleTokens = {
   nameFontSize: string;
   titleTextColor: string;
   titleFontSize: string;
+  subtitleTextColor: string;
+  subtitleFontSize: string;
   introTextColor: string;
   introFontSize: string;
   primaryButtonBackgroundColor: string;
@@ -282,6 +318,8 @@ export const buildFlexStyleTokens = (config: CardConfig): FlexStyleTokens => ({
   nameFontSize: getResolvedCardStyleValue(config.styles, 'nameFontSize', 'flex'),
   titleTextColor: getResolvedCardStyleValue(config.styles, 'titleTextColor', 'flex'),
   titleFontSize: getResolvedCardStyleValue(config.styles, 'titleFontSize', 'flex'),
+  subtitleTextColor: getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'flex'),
+  subtitleFontSize: getResolvedCardStyleValue(config.styles, 'subtitleFontSize', 'flex'),
   introTextColor: getResolvedCardStyleValue(config.styles, 'introTextColor', 'flex'),
   introFontSize: getResolvedCardStyleValue(config.styles, 'introFontSize', 'flex'),
   primaryButtonBackgroundColor: getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'flex'),

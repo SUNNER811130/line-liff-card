@@ -134,9 +134,9 @@ button:disabled {
 
 .subheadline {
   margin: 0;
-  font-size: var(--card-subheadline-size, 1rem);
+  font-size: var(--card-subtitle-size, var(--card-subheadline-size, 1rem));
   line-height: 1.65;
-  color: var(--muted);
+  color: var(--card-subtitle-color, var(--muted));
 }
 
 .intro,
@@ -557,6 +557,101 @@ button:disabled {
   border-radius: 18px;
   border: 1px solid rgba(24, 39, 61, 0.08);
   background: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
+}
+
+.admin-image-preview-fallback {
+  display: grid;
+  gap: 8px;
+  min-height: 180px;
+  align-content: center;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(24, 39, 61, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(237, 243, 251, 0.9) 100%),
+    repeating-linear-gradient(135deg, rgba(24, 54, 95, 0.04) 0, rgba(24, 54, 95, 0.04) 10px, transparent 10px, transparent 20px);
+}
+
+.admin-color-field-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-color-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 39, 61, 0.08);
+  background: rgba(248, 250, 252, 0.88);
+}
+
+.admin-color-chip {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(24, 39, 61, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.admin-color-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-color-meta strong {
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+.admin-color-meta small {
+  color: var(--muted);
+}
+
+.admin-color-input-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 60px;
+}
+
+.admin-native-color-input {
+  min-height: 52px;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 39, 61, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.admin-color-palette {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+
+.admin-color-swatch-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(24, 39, 61, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.admin-color-swatch-button.is-active {
+  border-color: rgba(24, 54, 95, 0.28);
+  box-shadow: 0 10px 24px rgba(24, 54, 95, 0.08);
+}
+
+.admin-color-swatch-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(24, 39, 61, 0.12);
 }
 
 .admin-placeholder-flag {

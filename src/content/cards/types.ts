@@ -36,6 +36,8 @@ export type CardStylesConfig = {
   nameFontSize?: string;
   titleTextColor?: string;
   titleFontSize?: string;
+  subtitleTextColor?: string;
+  subtitleFontSize?: string;
   introTextColor?: string;
   introFontSize?: string;
   headlineFontSize?: string;

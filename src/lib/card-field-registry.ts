@@ -133,8 +133,8 @@ const cardRuntimeFieldRegistrySource = [
     key: 'content.subheadline',
     label: '副標',
     group: 'identity',
-    visibilityScope: 'web',
-    helpText: '只顯示在 `/card/default/` 主視覺區，Flex 不使用這個欄位。',
+    visibilityScope: 'both',
+    helpText: '顯示在 `/card/default/` 主視覺區，也會進入 LINE Flex 的姓名下方補充說明。',
     isEditable: true,
     sortOrder: 50,
     kind: 'textarea',
@@ -499,7 +499,7 @@ const cardRuntimeFieldRegistrySource = [
     sortOrder: 680,
     kind: 'readonly',
   },
-  ...CARD_STYLE_REGISTRY.map(
+  ...CARD_STYLE_REGISTRY.filter((styleField) => styleField.key !== 'subheadlineFontSize').map(
     (styleField, index) =>
       ({
         key: `styles.${styleField.key}`,

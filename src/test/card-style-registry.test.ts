@@ -22,12 +22,28 @@ describe('card style registry', () => {
       '--card-brand-color': '#66758b',
       '--card-primary-button-bg': 'var(--accent)',
       '--card-name-size': 'clamp(2.5rem, 8vw, 4.6rem)',
+      '--card-subtitle-size': '1rem',
     });
 
     expect(buildFlexStyleTokens(config)).toMatchObject({
       brandTextColor: '#37506b',
       primaryButtonBackgroundColor: '#163863',
       nameFontSize: '28px',
+      subtitleFontSize: '13px',
+    });
+  });
+
+  it('keeps legacy web subheadline size as the fallback when the new subtitle size is absent', () => {
+    const config = cloneCardConfig(defaultCard);
+    config.styles = {
+      ...config.styles,
+      subheadlineFontSize: '22',
+      subtitleFontSize: '',
+    };
+
+    expect(buildCardWebStyleVariables(config)).toMatchObject({
+      '--card-subtitle-size': '22px',
+      '--card-subheadline-size': '22px',
     });
   });
 
@@ -53,6 +69,8 @@ describe('card style registry', () => {
     config.styles = {
       ...config.styles,
       nameFontSize: '32',
+      subtitleTextColor: '#556677',
+      subtitleFontSize: '18',
       introTextColor: '#334455',
       sectionGap: '20',
       flexBodyLineHeight: '6',
@@ -69,6 +87,8 @@ describe('card style registry', () => {
     });
     expect(flexTokens).toMatchObject({
       nameFontSize: '32px',
+      subtitleTextColor: '#556677',
+      subtitleFontSize: '18px',
       introTextColor: '#334455',
       sectionGap: '20px',
       bodyLineHeight: '6px',
@@ -77,6 +97,10 @@ describe('card style registry', () => {
       size: '32px',
     });
     expect(message.contents.body.contents[3]).toMatchObject({
+      color: '#556677',
+      size: '18px',
+    });
+    expect(message.contents.body.contents[4]).toMatchObject({
       color: '#334455',
       lineSpacing: '6px',
       margin: '20px',

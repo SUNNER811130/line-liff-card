@@ -93,6 +93,57 @@ const buildFlexFooterButtons = (config: CardConfig, pageUrl: string) => {
   ];
 };
 
+const buildFlexBodyContents = (config: CardConfig) => {
+  const styleTokens = buildFlexStyleTokens(config);
+  const subtitle = config.content.subheadline.trim();
+
+  return [
+    {
+      type: 'text' as const,
+      text: config.content.brandName,
+      size: styleTokens.brandFontSize,
+      weight: 'bold' as const,
+      color: styleTokens.brandTextColor,
+    },
+    {
+      type: 'text' as const,
+      text: config.content.fullName,
+      margin: styleTokens.titleSubtitleGap,
+      size: styleTokens.nameFontSize,
+      weight: 'bold' as const,
+      color: styleTokens.nameTextColor,
+    },
+    {
+      type: 'text' as const,
+      text: config.content.title,
+      margin: styleTokens.titleSubtitleGap,
+      size: styleTokens.titleFontSize,
+      color: styleTokens.titleTextColor,
+    },
+    ...(subtitle
+      ? [
+          {
+            type: 'text' as const,
+            text: subtitle,
+            wrap: true,
+            margin: styleTokens.titleSubtitleGap,
+            size: styleTokens.subtitleFontSize,
+            color: styleTokens.subtitleTextColor,
+          },
+        ]
+      : []),
+    {
+      type: 'text' as const,
+      text: config.content.intro,
+      wrap: true,
+      margin: styleTokens.sectionGap,
+      size: styleTokens.introFontSize,
+      color: styleTokens.introTextColor,
+      lineSpacing: styleTokens.bodyLineHeight,
+    },
+  ];
+};
+
 export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string) => {
   const styleTokens = buildFlexStyleTokens(config);
 
@@ -117,39 +168,7 @@ export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: 
         type: 'box' as const,
         layout: 'vertical' as const,
         paddingAll: styleTokens.sectionGap,
-        contents: [
-          {
-            type: 'text' as const,
-            text: config.content.brandName,
-            size: styleTokens.brandFontSize,
-            weight: 'bold' as const,
-            color: styleTokens.brandTextColor,
-          },
-          {
-            type: 'text' as const,
-            text: config.content.fullName,
-            margin: styleTokens.titleSubtitleGap,
-            size: styleTokens.nameFontSize,
-            weight: 'bold' as const,
-            color: styleTokens.nameTextColor,
-          },
-          {
-            type: 'text' as const,
-            text: config.content.title,
-            margin: styleTokens.titleSubtitleGap,
-            size: styleTokens.titleFontSize,
-            color: styleTokens.titleTextColor,
-          },
-          {
-            type: 'text' as const,
-            text: config.content.intro,
-            wrap: true,
-            margin: styleTokens.sectionGap,
-            size: styleTokens.introFontSize,
-            color: styleTokens.introTextColor,
-            lineSpacing: styleTokens.bodyLineHeight,
-          },
-        ],
+        contents: buildFlexBodyContents(config),
       },
       footer: {
         type: 'box' as const,

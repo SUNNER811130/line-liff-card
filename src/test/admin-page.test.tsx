@@ -327,6 +327,31 @@ describe('AdminPage', () => {
     });
   });
 
+  it('normalizes preview images for admin cards and falls back share preview to photo.src', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    const remoteConfig = cloneCardConfig(defaultCard);
+    remoteConfig.photo.src = 'https://drive.google.com/file/d/drive-photo-123/view?usp=sharing';
+    remoteConfig.seo.ogImage = 'https://drive.google.com/file/d/drive-og-456/view?usp=sharing';
+    vi.stubGlobal('fetch', buildFetchMock(remoteConfig));
+
+    const { container } = render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.clear(screen.getByLabelText('OG Image URL'));
+
+    const previewImages = Array.from(container.querySelectorAll('.admin-image-preview')) as HTMLImageElement[];
+    expect(previewImages[0]?.src).toBe('https://drive.google.com/thumbnail?id=drive-photo-123&sz=w2000');
+    expect(previewImages[1]?.src).toBe('https://drive.google.com/thumbnail?id=drive-photo-123&sz=w2000');
+    expect(screen.getByText(/預覽來源：photo\.src fallback/)).toBeInTheDocument();
+  });
+
   it('keeps unrelated local edits dirty while marking uploaded image as already synced', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     vi.stubGlobal('fetch', buildFetchMock());
@@ -374,5 +399,27 @@ describe('AdminPage', () => {
       expect(screen.getAllByText('僅 Flex').length).toBeGreaterThan(0);
       expect(screen.getAllByText('僅網頁').length).toBeGreaterThan(0);
     });
+  });
+
+  it('maps preset swatch clicks back to hex input values and warns on invalid hex', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('樣式設定')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '品牌 / 小標字色 設為 金棕' }));
+    expect(screen.getByLabelText('品牌 / 小標字色')).toHaveValue('#8e6c46');
+
+    await user.clear(screen.getByLabelText('品牌 / 小標字色'));
+    await user.type(screen.getByLabelText('品牌 / 小標字色'), 'oops');
+    expect(screen.getByText('請輸入 #RGB 或 #RRGGBB；非法色碼會先以 fallback 顯示。')).toBeInTheDocument();
   });
 });

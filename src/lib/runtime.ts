@@ -73,6 +73,16 @@ const normalizeGoogleDriveAssetUrl = (assetUrl: string): string => {
   }
 };
 
+export const getPreviewAssetUrl = (assetPath: string): string => {
+  if (/^(https?:)?\/\//.test(assetPath)) {
+    return normalizeGoogleDriveAssetUrl(assetPath);
+  }
+
+  const normalizedAssetPath = assetPath.replace(/^\/+/, '');
+  const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin);
+  return new URL(normalizedAssetPath, baseUrl).toString();
+};
+
 export const resolveActionUrl = (value: string, fallbackUrl: string): string => {
   if (isPlaceholderValue(value)) {
     return fallbackUrl;
@@ -86,11 +96,5 @@ export const resolveActionUrl = (value: string, fallbackUrl: string): string => 
 };
 
 export const toAssetUrl = (assetPath: string): string => {
-  if (/^(https?:)?\/\//.test(assetPath)) {
-    return normalizeGoogleDriveAssetUrl(assetPath);
-  }
-
-  const normalizedAssetPath = assetPath.replace(/^\/+/, '');
-  const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin);
-  return new URL(normalizedAssetPath, baseUrl).toString();
+  return getPreviewAssetUrl(assetPath);
 };

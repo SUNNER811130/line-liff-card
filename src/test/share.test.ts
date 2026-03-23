@@ -128,9 +128,50 @@ describe('share helpers', () => {
       type: 'text',
       size: '12px',
     });
-    expect(message.contents.body.contents[3]).toMatchObject({
+    expect(message.contents.body.contents[4]).toMatchObject({
       type: 'text',
       lineSpacing: '4px',
     });
+  });
+
+  it('renders subtitle into the flex body with its own style tokens', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    const runtimeConfig = cloneCardConfig(defaultCard);
+    runtimeConfig.content.subheadline = '副標進 Flex';
+    runtimeConfig.styles = {
+      ...runtimeConfig.styles,
+      subtitleTextColor: '#7a6542',
+      subtitleFontSize: '17',
+    };
+    const { buildFlexMessage } = await import('../lib/share');
+
+    const message = buildFlexMessage(
+      runtimeConfig,
+      'https://liff.line.me/mock-permalink',
+      'https://example.test/card/default/',
+    );
+
+    expect(message.contents.body.contents[3]).toMatchObject({
+      type: 'text',
+      text: '副標進 Flex',
+      color: '#7a6542',
+      size: '17px',
+    });
+  });
+
+  it('omits the subtitle block from flex when the value is blank', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    const runtimeConfig = cloneCardConfig(defaultCard);
+    runtimeConfig.content.subheadline = '   ';
+    const { buildFlexMessage } = await import('../lib/share');
+
+    const message = buildFlexMessage(
+      runtimeConfig,
+      'https://liff.line.me/mock-permalink',
+      'https://example.test/card/default/',
+    );
+
+    expect(message.contents.body.contents).toHaveLength(4);
+    expect(message.contents.body.contents.some((item) => 'text' in item && item.text === '   ')).toBe(false);
   });
 });

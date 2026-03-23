@@ -56,7 +56,9 @@ import {
   FLEX_HERO_IMAGE_RECOMMENDED_HEIGHT,
   FLEX_HERO_IMAGE_RECOMMENDED_WIDTH,
   getCardStyleInputValue,
+  getResolvedCardStyleValue,
 } from '../lib/card-style-registry';
+import { getPreviewAssetUrl } from '../lib/runtime';
 
 type FieldProps = {
   label: string;
@@ -73,6 +75,41 @@ type FieldProps = {
   trailing?: ReactNode;
 };
 
+type ColorStyleKey =
+  | 'brandTextColor'
+  | 'nameTextColor'
+  | 'titleTextColor'
+  | 'subtitleTextColor'
+  | 'introTextColor'
+  | 'primaryButtonBackgroundColor'
+  | 'primaryButtonTextColor'
+  | 'secondaryButtonBackgroundColor'
+  | 'secondaryButtonTextColor';
+
+const COLOR_STYLE_KEYS = new Set<ColorStyleKey>([
+  'brandTextColor',
+  'nameTextColor',
+  'titleTextColor',
+  'subtitleTextColor',
+  'introTextColor',
+  'primaryButtonBackgroundColor',
+  'primaryButtonTextColor',
+  'secondaryButtonBackgroundColor',
+  'secondaryButtonTextColor',
+]);
+
+const COLOR_SWATCHES = [
+  { label: '深藍', hex: '#18365f' },
+  { label: '灰藍', hex: '#66758b' },
+  { label: '深灰', hex: '#172233' },
+  { label: '米白', hex: '#f5f1ea' },
+  { label: '淺灰', hex: '#edf3fb' },
+  { label: '金棕', hex: '#8e6c46' },
+] as const;
+
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+const FALLBACK_COLOR_INPUT_VALUE = '#18365f';
+
 const visibilityScopeLabel: Record<FieldVisibilityScope, string> = {
   both: 'Flex＋網頁',
   web: '僅網頁',
@@ -85,6 +122,176 @@ const actionToneOptions: CardActionTone[] = ['primary', 'secondary'];
 const openExternalUrl = (url: string) => {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
+
+const isHexColor = (value: string): boolean => HEX_COLOR_PATTERN.test(value.trim());
+
+const expandShortHexColor = (value: string): string => {
+  const trimmed = value.trim();
+  if (!/^#([0-9a-f]{3})$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  const [, hex] = trimmed.match(/^#([0-9a-f]{3})$/i) ?? [];
+  return `#${hex
+    .split('')
+    .map((char) => `${char}${char}`)
+    .join('')}`;
+};
+
+const normalizeColorPickerValue = (value: string): string => {
+  if (!isHexColor(value)) {
+    return FALLBACK_COLOR_INPUT_VALUE;
+  }
+
+  return expandShortHexColor(value).toLowerCase();
+};
+
+const getColorFieldFallbackValue = (
+  styles: CardConfig['styles'],
+  key: ColorStyleKey,
+  scope: FieldVisibilityScope,
+): string => {
+  const previewSurface = scope === 'flex' ? 'flex' : 'web';
+  const configured = getCardStyleInputValue(styles, key);
+  if (isHexColor(configured)) {
+    return normalizeColorPickerValue(configured);
+  }
+
+  const resolved = getResolvedCardStyleValue(styles, key, previewSurface);
+  return isHexColor(resolved) ? normalizeColorPickerValue(resolved) : FALLBACK_COLOR_INPUT_VALUE;
+};
+
+type AdminColorFieldProps = FieldProps & {
+  swatchHex: string;
+  invalidMessage?: string | null;
+  onColorPick: (value: string) => void;
+};
+
+function AdminColorField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  helpText,
+  badgeLabel,
+  error,
+  full = false,
+  readOnly = false,
+  swatchHex,
+  invalidMessage,
+  onColorPick,
+}: AdminColorFieldProps) {
+  return (
+    <label className={`admin-field ${full ? 'admin-field-full' : ''}`}>
+      <span>
+        <span>{label}</span>
+        <span className="admin-visibility-badge">{badgeLabel}</span>
+      </span>
+      <div className="admin-color-field-shell">
+        <div className="admin-color-current">
+          <span className="admin-color-chip" aria-hidden="true" style={{ backgroundColor: swatchHex }} />
+          <span className="admin-color-meta">
+            <strong>目前色塊</strong>
+            <small>{isHexColor(value) ? normalizeColorPickerValue(value) : `${swatchHex} fallback`}</small>
+          </span>
+        </div>
+        <div className="admin-color-input-row">
+          <input
+            aria-label={label}
+            type="text"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+            readOnly={readOnly}
+            inputMode="text"
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+          <input
+            aria-label={`${label} 色票選擇`}
+            type="color"
+            value={swatchHex}
+            onChange={(event) => onColorPick(event.target.value)}
+            disabled={readOnly}
+            className="admin-native-color-input"
+          />
+        </div>
+        <div className="admin-color-palette" role="group" aria-label={`${label} 預設色盤`}>
+          {COLOR_SWATCHES.map((color) => (
+            <button
+              key={`${label}-${color.hex}`}
+              type="button"
+              className={`admin-color-swatch-button ${normalizeColorPickerValue(value || swatchHex) === color.hex.toLowerCase() ? 'is-active' : ''}`}
+              onClick={() => onColorPick(color.hex)}
+              aria-label={`${label} 設為 ${color.label}`}
+              title={`${color.label} ${color.hex}`}
+            >
+              <span className="admin-color-swatch-dot" aria-hidden="true" style={{ backgroundColor: color.hex }} />
+              <span>{color.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {error ? <small className="admin-inline-error">{error}</small> : null}
+      {invalidMessage ? <small className="admin-inline-error">{invalidMessage}</small> : null}
+      <small className="admin-field-description">{helpText}</small>
+    </label>
+  );
+}
+
+type AdminPreviewImageCardProps = {
+  title: string;
+  primaryUrl: string;
+  fallbackUrl?: string;
+  alt: string;
+  emptyMessage: string;
+  fallbackMessage: string;
+  sourceLabel: string;
+  fallbackLabel?: string;
+};
+
+function AdminPreviewImageCard({
+  title,
+  primaryUrl,
+  fallbackUrl,
+  alt,
+  emptyMessage,
+  fallbackMessage,
+  sourceLabel,
+  fallbackLabel,
+}: AdminPreviewImageCardProps) {
+  const primaryPreviewable = isImagePreviewable(primaryUrl);
+  const fallbackPreviewable = fallbackUrl ? isImagePreviewable(fallbackUrl) : false;
+  const selectedUrl = primaryPreviewable ? primaryUrl : fallbackPreviewable ? fallbackUrl ?? '' : '';
+  const selectedLabel = primaryPreviewable ? sourceLabel : fallbackPreviewable ? fallbackLabel ?? sourceLabel : '';
+  const normalizedUrl = selectedUrl ? getPreviewAssetUrl(selectedUrl) : '';
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [normalizedUrl]);
+
+  return (
+    <div className="admin-image-preview-card">
+      <p className="section-label">{title}</p>
+      {normalizedUrl && !loadFailed ? (
+        <>
+          <img src={normalizedUrl} alt={alt} className="admin-image-preview" onError={() => setLoadFailed(true)} />
+          <p className="support-copy">
+            預覽來源：{selectedLabel}
+            {selectedUrl !== normalizedUrl ? '（已做預覽正規化）' : ''}
+          </p>
+        </>
+      ) : (
+        <div className="admin-image-preview-fallback" role="status">
+          <strong>{normalizedUrl ? '圖片載入失敗' : '目前沒有可預覽圖片'}</strong>
+          <p className="support-copy">{normalizedUrl ? fallbackMessage : emptyMessage}</p>
+          {selectedLabel ? <p className="support-copy">預期來源：{selectedLabel}</p> : null}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Formal admin CMS for the single runtime card config. Keep unlock/save/upload
@@ -371,6 +578,19 @@ export function AdminPage() {
     }));
   };
 
+  const getStyleFieldError = (styleKey: keyof NonNullable<CardConfig['styles']>): string | null => {
+    if (!COLOR_STYLE_KEYS.has(styleKey as ColorStyleKey)) {
+      return null;
+    }
+
+    const value = getCardStyleInputValue(draft.styles, styleKey);
+    if (!value) {
+      return null;
+    }
+
+    return isHexColor(value) ? null : '請輸入 #RGB 或 #RRGGBB；非法色碼會先以 fallback 顯示。';
+  };
+
   const updateAction = (index: number, updater: (action: CardActionConfig) => CardActionConfig) => {
     patchDraft((current) => {
       const actions = [...current.actions];
@@ -431,6 +651,22 @@ export function AdminPage() {
       full={field.full}
       readOnly={options.readOnly ?? !field.isEditable}
       trailing={options.trailing}
+    />
+  );
+
+  const renderColorStyleField = (field: AdminFieldRegistryItem, styleKey: ColorStyleKey) => (
+    <AdminColorField
+      key={field.key}
+      label={field.label}
+      value={getCardStyleInputValue(draft.styles, styleKey)}
+      onChange={(value) => updateStyle(styleKey, value)}
+      onColorPick={(value) => updateStyle(styleKey, value)}
+      placeholder={field.placeholder}
+      helpText={field.helpText}
+      badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+      full={field.full}
+      swatchHex={getColorFieldFallbackValue(draft.styles, styleKey, field.visibilityScope)}
+      invalidMessage={getStyleFieldError(styleKey)}
     />
   );
 
@@ -626,19 +862,23 @@ export function AdminPage() {
           patchDraft((current) => ({ ...current, share: { ...current.share, text: value } })),
         );
       case 'styles.brandTextColor':
-        return renderTextField(field, getCardStyleInputValue(draft.styles, 'brandTextColor'), (value) => updateStyle('brandTextColor', value));
+        return renderColorStyleField(field, 'brandTextColor');
       case 'styles.brandFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'brandFontSize'), (value) => updateStyle('brandFontSize', value));
       case 'styles.nameTextColor':
-        return renderTextField(field, getCardStyleInputValue(draft.styles, 'nameTextColor'), (value) => updateStyle('nameTextColor', value));
+        return renderColorStyleField(field, 'nameTextColor');
       case 'styles.nameFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'nameFontSize'), (value) => updateStyle('nameFontSize', value));
       case 'styles.titleTextColor':
-        return renderTextField(field, getCardStyleInputValue(draft.styles, 'titleTextColor'), (value) => updateStyle('titleTextColor', value));
+        return renderColorStyleField(field, 'titleTextColor');
       case 'styles.titleFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'titleFontSize'), (value) => updateStyle('titleFontSize', value));
+      case 'styles.subtitleTextColor':
+        return renderColorStyleField(field, 'subtitleTextColor');
+      case 'styles.subtitleFontSize':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'subtitleFontSize'), (value) => updateStyle('subtitleFontSize', value));
       case 'styles.introTextColor':
-        return renderTextField(field, getCardStyleInputValue(draft.styles, 'introTextColor'), (value) => updateStyle('introTextColor', value));
+        return renderColorStyleField(field, 'introTextColor');
       case 'styles.introFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'introFontSize'), (value) => updateStyle('introFontSize', value));
       case 'styles.headlineFontSize':
@@ -646,21 +886,13 @@ export function AdminPage() {
       case 'styles.subheadlineFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'subheadlineFontSize'), (value) => updateStyle('subheadlineFontSize', value));
       case 'styles.primaryButtonBackgroundColor':
-        return renderTextField(
-          field,
-          getCardStyleInputValue(draft.styles, 'primaryButtonBackgroundColor'),
-          (value) => updateStyle('primaryButtonBackgroundColor', value),
-        );
+        return renderColorStyleField(field, 'primaryButtonBackgroundColor');
       case 'styles.primaryButtonTextColor':
-        return renderTextField(field, getCardStyleInputValue(draft.styles, 'primaryButtonTextColor'), (value) => updateStyle('primaryButtonTextColor', value));
+        return renderColorStyleField(field, 'primaryButtonTextColor');
       case 'styles.secondaryButtonBackgroundColor':
-        return renderTextField(
-          field,
-          getCardStyleInputValue(draft.styles, 'secondaryButtonBackgroundColor'),
-          (value) => updateStyle('secondaryButtonBackgroundColor', value),
-        );
+        return renderColorStyleField(field, 'secondaryButtonBackgroundColor');
       case 'styles.secondaryButtonTextColor':
-        return renderTextField(field, getCardStyleInputValue(draft.styles, 'secondaryButtonTextColor'), (value) => updateStyle('secondaryButtonTextColor', value));
+        return renderColorStyleField(field, 'secondaryButtonTextColor');
       case 'styles.buttonBorderRadius':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'buttonBorderRadius'), (value) => updateStyle('buttonBorderRadius', value));
       case 'styles.sectionGap':
@@ -760,14 +992,24 @@ export function AdminPage() {
               <p className="support-copy">此圖會同時用於 `/card/default/` 與 LINE Flex hero，Flex 端會以 cover 方式裁切。</p>
             </div>
             <div className="admin-image-preview-grid">
-              <div className="admin-image-preview-card">
-                <p className="section-label">主視覺預覽</p>
-                {isImagePreviewable(draft.photo.src) ? <img src={draft.photo.src} alt={draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的正式圖片 URL。</p>}
-              </div>
-              <div className="admin-image-preview-card">
-                <p className="section-label">分享圖預覽</p>
-                {isImagePreviewable(draft.seo.ogImage) ? <img src={draft.seo.ogImage} alt={draft.seo.ogTitle || draft.photo.alt} className="admin-image-preview" /> : <p className="support-copy">請提供可公開存取的 OG Image URL。</p>}
-              </div>
+              <AdminPreviewImageCard
+                title="主視覺預覽"
+                primaryUrl={draft.photo.src}
+                alt={draft.photo.alt}
+                emptyMessage="請提供可公開存取的正式圖片 URL。"
+                fallbackMessage="請確認圖片已公開，或改用可直接顯示的正式圖片 URL。"
+                sourceLabel="photo.src"
+              />
+              <AdminPreviewImageCard
+                title="分享圖預覽"
+                primaryUrl={draft.seo.ogImage}
+                fallbackUrl={draft.photo.src}
+                alt={draft.seo.ogTitle || draft.photo.alt}
+                emptyMessage="請提供 OG Image URL；若留空，預覽會退回 photo.src。"
+                fallbackMessage="請確認 OG Image 已公開可讀；若仍失敗，可先檢查 Google Drive 權限或改用直接圖片網址。"
+                sourceLabel="seo.ogImage"
+                fallbackLabel="photo.src fallback"
+              />
             </div>
             <StatusBanner status={assetUploadStatus} />
           </>

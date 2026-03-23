@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 describe('runtime asset urls', () => {
+  it('exposes the same preview normalization helper used by admin previews', async () => {
+    const { getPreviewAssetUrl } = await import('../lib/runtime');
+
+    expect(getPreviewAssetUrl('https://drive.google.com/file/d/drive-file-123/view?usp=sharing')).toBe(
+      'https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000',
+    );
+  });
+
   it('normalizes legacy Drive uc image urls to stable thumbnail urls', async () => {
     const { toAssetUrl } = await import('../lib/runtime');
 

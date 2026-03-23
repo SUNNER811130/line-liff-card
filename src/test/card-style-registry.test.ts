@@ -72,6 +72,12 @@ describe('card style registry', () => {
     const config = cloneCardConfig(defaultCard);
     config.styles = {
       ...config.styles,
+      brandFontWeight: 'medium',
+      nameFontWeight: 'bold',
+      titleFontWeight: 'medium',
+      subtitleFontWeight: 'bold',
+      introFontWeight: 'medium',
+      buttonFontWeight: 'medium',
       nameFontSize: '32',
       subtitleTextColor: '#556677',
       subtitleFontSize: '18',
@@ -85,11 +91,22 @@ describe('card style registry', () => {
     const message = buildFlexMessage(config, 'https://example.test/share', 'https://example.test/card/default/');
 
     expect(webVariables).toMatchObject({
+      '--card-brand-weight': '500',
+      '--card-name-weight': '700',
+      '--card-title-weight': '500',
+      '--card-subtitle-weight': '700',
+      '--card-intro-weight': '500',
+      '--card-button-weight': '500',
       '--card-name-size': '32px',
       '--card-intro-color': '#334455',
       '--card-section-gap': '20px',
     });
     expect(flexTokens).toMatchObject({
+      brandFontWeight: 'bold',
+      nameFontWeight: 'bold',
+      titleFontWeight: 'bold',
+      subtitleFontWeight: 'bold',
+      introFontWeight: 'bold',
       nameFontSize: '32px',
       subtitleTextColor: '#556677',
       subtitleFontSize: '18px',
@@ -99,15 +116,18 @@ describe('card style registry', () => {
     });
     expect(message.contents.body.contents[1]).toMatchObject({
       size: '32px',
+      weight: 'bold',
     });
     expect(message.contents.body.contents[3]).toMatchObject({
       color: '#556677',
       size: '18px',
+      weight: 'bold',
     });
     expect(message.contents.body.contents[4]).toMatchObject({
       color: '#334455',
       lineSpacing: '6px',
       margin: '20px',
+      weight: 'bold',
     });
   });
 

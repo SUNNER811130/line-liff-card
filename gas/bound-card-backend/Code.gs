@@ -1,7 +1,9 @@
 var ACTIONS = {
   health: 'health',
   getCard: 'getCard',
+  listCards: 'listCards',
   saveCard: 'saveCard',
+  publishSnapshot: 'publishSnapshot',
   createAdminSession: 'createAdminSession',
   verifyAdminSession: 'verifyAdminSession',
   uploadImage: 'uploadImage',
@@ -67,6 +69,10 @@ function doGet(e) {
       return successResponse_(action, buildHealthPayload_());
     }
 
+    if (action === ACTIONS.listCards) {
+      return successResponse_(action, listCards_());
+    }
+
     if (action !== ACTIONS.getCard) {
       return errorResponse_(action, 'Unsupported action.');
     }
@@ -112,6 +118,10 @@ function doPost(e) {
       return successResponse_(action, uploadImage_(payload));
     }
 
+    if (action === ACTIONS.publishSnapshot) {
+      return successResponse_(action, publishSnapshot_(payload));
+    }
+
     if (action !== ACTIONS.saveCard) {
       return errorResponse_(action, 'Unsupported action.');
     }
@@ -135,16 +145,56 @@ function saveCard_(payload) {
     throw new Error('config.slug must match slug.');
   }
 
+  if (!isLiveSlug_(slug, config)) {
+    throw new Error('Snapshot cards are immutable. Please switch back to live/default before saving.');
+  }
+
   var runtime = getRuntimeContext_();
   var updatedAt = new Date().toISOString();
   var updatedBy = normalizeUserLabel_(payload.updatedBy || session.subject || 'admin');
-  upsertCardRow_(runtime.sheet, slug, JSON.stringify(config), updatedAt, updatedBy);
+  var liveConfig = buildLiveConfig_(config, slug);
+  upsertCardRow_(runtime.sheet, slug, JSON.stringify(liveConfig), updatedAt, updatedBy);
 
   return {
     slug: slug,
-    config: config,
+    config: liveConfig,
     updatedAt: updatedAt,
     updatedBy: updatedBy,
+    source: 'bound-spreadsheet',
+  };
+}
+
+function publishSnapshot_(payload) {
+  var session = verifyAdminSessionToken_(payload.adminSession);
+  var slug = normalizeSlug_(payload.slug) || DEFAULT_RUNTIME_SLUG;
+  var config = payload.config;
+  assertCardConfigShape_(config);
+  if (normalizeSlug_(config.slug) !== slug) {
+    throw new Error('config.slug must match slug.');
+  }
+
+  if (!isLiveSlug_(slug, config)) {
+    throw new Error('Only live/default can publish snapshots.');
+  }
+
+  var runtime = getRuntimeContext_();
+  var updatedAt = new Date().toISOString();
+  var updatedBy = normalizeUserLabel_(payload.updatedBy || session.subject || 'admin');
+  var liveConfig = buildLiveConfig_(config, slug);
+  upsertCardRow_(runtime.sheet, slug, JSON.stringify(liveConfig), updatedAt, updatedBy);
+
+  var versionId = createVersionId_(updatedAt);
+  var snapshotSlug = buildSnapshotSlug_(slug, versionId);
+  var snapshotConfig = buildSnapshotConfig_(liveConfig, slug, snapshotSlug, versionId, updatedAt);
+  upsertCardRow_(runtime.sheet, snapshotSlug, JSON.stringify(snapshotConfig), updatedAt, updatedBy);
+
+  return {
+    slug: snapshotSlug,
+    config: snapshotConfig,
+    updatedAt: updatedAt,
+    updatedBy: updatedBy,
+    versionId: versionId,
+    publishedAt: updatedAt,
     source: 'bound-spreadsheet',
   };
 }
@@ -201,6 +251,9 @@ function uploadImage_(payload) {
   }
 
   var config = parseStoredConfig_(row.configJson);
+  if (!isLiveSlug_(slug, config)) {
+    throw new Error('Snapshot cards are immutable. Please switch back to live/default before uploading.');
+  }
   if (field === 'photo') {
     config.photo.src = publicUrl;
   } else {
@@ -210,7 +263,8 @@ function uploadImage_(payload) {
   assertCardConfigShape_(config);
   var updatedAt = new Date().toISOString();
   var updatedBy = normalizeUserLabel_(session.subject || 'admin');
-  upsertCardRow_(runtime.sheet, slug, JSON.stringify(config), updatedAt, updatedBy);
+  var liveConfig = buildLiveConfig_(config, slug);
+  upsertCardRow_(runtime.sheet, slug, JSON.stringify(liveConfig), updatedAt, updatedBy);
 
   return {
     slug: slug,
@@ -219,9 +273,30 @@ function uploadImage_(payload) {
     viewUrl: file.getUrl(),
     downloadUrl: buildDriveDownloadUrl_(file.getId()),
     mimeType: file.getMimeType(),
-    config: config,
+    config: liveConfig,
     updatedAt: updatedAt,
     updatedBy: updatedBy,
+    source: 'bound-spreadsheet',
+  };
+}
+
+function listCards_() {
+  var runtime = getRuntimeContext_();
+  var rows = listCardRows_(runtime.sheet);
+
+  return {
+    cards: rows
+      .map(function(row) {
+        var config;
+        try {
+          config = parseStoredConfig_(row.configJson);
+        } catch (error) {
+          return null;
+        }
+
+        return buildCardSummary_(row, config);
+      })
+      .filter(Boolean),
     source: 'bound-spreadsheet',
   };
 }
@@ -310,6 +385,26 @@ function findCardRowBySlug_(sheet, slug) {
   }
 
   return null;
+}
+
+function listCardRows_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+
+  var values = sheet.getRange(2, 1, lastRow - 1, REQUIRED_COLUMNS.length).getValues();
+  return values.map(function(row, index) {
+    return {
+      rowIndex: index + 2,
+      slug: normalizeSlug_(row[0]),
+      configJson: String(row[1] || ''),
+      updatedAt: String(row[2] || ''),
+      updatedBy: String(row[3] || ''),
+    };
+  }).filter(function(row) {
+    return Boolean(row.slug);
+  });
 }
 
 function upsertCardRow_(sheet, slug, configJson, updatedAt, updatedBy) {
@@ -448,6 +543,72 @@ function normalizeCell_(value) {
 function normalizeUserLabel_(value) {
   var trimmed = String(value || '').trim();
   return trimmed || 'admin';
+}
+
+function getVersionMeta_(config) {
+  var version = config && config.version && typeof config.version === 'object' ? config.version : null;
+  return {
+    kind: version && (version.kind === 'live' || version.kind === 'snapshot') ? version.kind : null,
+    versionId: version && version.versionId ? String(version.versionId).trim() : '',
+    publishedAt: version && version.publishedAt ? String(version.publishedAt).trim() : '',
+    liveSlug: version && version.liveSlug ? normalizeSlug_(version.liveSlug) : '',
+    sourceSlug: version && version.sourceSlug ? normalizeSlug_(version.sourceSlug) : '',
+  };
+}
+
+function isLiveSlug_(slug, config) {
+  var normalizedSlug = normalizeSlug_(slug);
+  if (normalizedSlug === DEFAULT_RUNTIME_SLUG) {
+    return true;
+  }
+
+  return getVersionMeta_(config).kind === 'live';
+}
+
+function buildLiveConfig_(config, slug) {
+  var nextConfig = JSON.parse(JSON.stringify(config));
+  nextConfig.slug = normalizeSlug_(slug) || DEFAULT_RUNTIME_SLUG;
+  nextConfig.version = {
+    kind: 'live',
+    liveSlug: nextConfig.slug,
+    sourceSlug: nextConfig.slug,
+  };
+  return nextConfig;
+}
+
+function buildSnapshotConfig_(config, liveSlug, snapshotSlug, versionId, publishedAt) {
+  var nextConfig = JSON.parse(JSON.stringify(config));
+  nextConfig.slug = snapshotSlug;
+  nextConfig.version = {
+    kind: 'snapshot',
+    versionId: versionId,
+    publishedAt: publishedAt,
+    liveSlug: normalizeSlug_(liveSlug) || DEFAULT_RUNTIME_SLUG,
+    sourceSlug: normalizeSlug_(liveSlug) || DEFAULT_RUNTIME_SLUG,
+  };
+  return nextConfig;
+}
+
+function createVersionId_(publishedAt) {
+  return Utilities.formatDate(new Date(publishedAt), 'UTC', "yyyyMMdd'T'HHmmss'Z'");
+}
+
+function buildSnapshotSlug_(liveSlug, versionId) {
+  return [normalizeSlug_(liveSlug) || DEFAULT_RUNTIME_SLUG, 'v', normalizeSlug_(versionId).replace(/[^a-z0-9]+/g, '-')].join('-');
+}
+
+function buildCardSummary_(row, config) {
+  var version = getVersionMeta_(config);
+  var isLive = row.slug === DEFAULT_RUNTIME_SLUG || version.kind === 'live';
+
+  return {
+    slug: row.slug,
+    isLive: isLive,
+    versionId: version.versionId || '',
+    publishedAt: version.publishedAt || '',
+    updatedAt: row.updatedAt,
+    updatedBy: row.updatedBy,
+  };
 }
 
 function normalizeAssetField_(value) {

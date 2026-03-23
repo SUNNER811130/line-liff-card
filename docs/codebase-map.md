@@ -9,11 +9,11 @@
 - `src/components/AdminPage.tsx`
   正式 CMS。負責 unlock、讀取正式 runtime config、編輯本地 draft、save、upload、preview。
 - `src/lib/card-source.ts`
-  前後台共用的 runtime data adapter。封裝 `getCard`、`saveCard`、`createAdminSession`、`verifyAdminSession`、`uploadImage` 與 bundled fallback。
+  前後台共用的 runtime data adapter。封裝 `getCard`、`listCards`、`saveCard`、`publishSnapshot`、`createAdminSession`、`verifyAdminSession`、`uploadImage` 與 bundled fallback。
 - `src/lib/card-admin-api.ts`
   Apps Script Web App request/response envelope helper。這裡是 contract 的最小邊界。
 - `src/lib/share.ts`
-  LINE Flex payload 組裝、share intent URL、LIFF/web fallback share 流程。
+  LINE Flex payload 組裝、share intent URL、LIFF/web fallback share 流程；snapshot permalink 也沿用同一套 slug-based share。
 - `src/lib/liff.ts`
   LIFF SDK 初始化、endpoint 驗證、login、permanent link、shareTargetPicker。
 - `src/lib/runtime.ts`
@@ -23,13 +23,13 @@
 - `src/lib/card-field-registry.ts`
   admin 欄位 registry。定義每個 runtime key 在 admin 的分組、標籤、說明、可編輯性。
 - `src/lib/card-style-registry.ts`
-  集中管理 Flex 與 `/card/default/` 共用的 style key、預設值、作用範圍與 fallback token；hero 比例 / mode / bubble size / zoom / focal 也從這裡解析。
+  集中管理 Flex 與 `/card/default/` 共用的 style key、預設值、作用範圍與 fallback token；hero 比例 / mode / bubble size / zoom / focal 與字重也從這裡解析。
 - `src/lib/card-validation.ts`
   admin save 前驗證規則。
 - `src/content/cards/*`
   `CardConfig` 型別、schema、bundled default seed、draft clone/parse、前台 view-model、theme preset。
 - `gas/bound-card-backend/Code.gs`
-  正式 Apps Script backend。維持 spreadsheet schema、admin session、save/upload contract。
+  正式 Apps Script backend。維持 spreadsheet schema、admin session、save/upload contract，並在同一張 `cards_runtime` sheet 內支援 `default` live + 多筆 snapshot rows。
 - `scripts/*`
   provision、health check、smoke/build 檢查。
 - `src/test/*`
@@ -40,9 +40,10 @@
 1. `src/App.tsx` 透過 `resolveAppRoute()` 判斷 route。
 2. 前台 route 進入 `RuntimeCardRoute`，呼叫 `loadRuntimeCard(slug)`。
 3. `src/lib/card-source.ts`
-   - 先以 canonical slug 找 bundled card。
+   - 若 slug 有 bundled card，先保留 bundled fallback。
    - 嘗試用 `VITE_CARD_API_BASE_URL` 向 GAS `getCard` 取正式資料。
-   - 遠端失敗時 fallback 回 bundled `defaultCard`。
+   - `default` 失敗時 fallback 回 bundled `defaultCard`。
+   - snapshot slug 沒有 bundled fallback，遠端不存在時直接進 not found。
 4. `src/components/CardPage.tsx`
    - `applySeo(config)` 寫入 title/og metadata。
    - `initLiff()` 決定是否啟用 LIFF 能力。
@@ -100,11 +101,13 @@
   - `actions[1].label`
   - `actions[1].url`
   - `slug`，用來組第三顆 forward-share 按鈕
+  - `styles.*FontWeight`，用來映射 Flex 可用的 `regular` / `bold`
 - hero image 使用 `toAssetUrl(config.photo.src)`
 - hero 版型設定由 `buildFlexStyleTokens()` 解析：
   - `styles.heroAspectRatio` -> `hero.aspectRatio`
   - `styles.heroAspectMode` -> `hero.aspectMode`
   - `styles.flexBubbleSize` -> `bubble.size`
+  - `styles.brand/name/title/subtitle/intro FontWeight` -> Flex text weight
 - footer 第一、二顆按鈕 URL 用 `resolveActionUrl(action.url, pageUrl)`
 - footer 第三顆按鈕固定文案 `分享這張電子名片`，URL 來自 `buildFlexForwardShareUrl(config.slug)`
 
@@ -138,6 +141,12 @@
   - 只影響 Flex bubble size，空值 fallback `mega`。
 - `styles.heroZoom` / `styles.heroFocalX` / `styles.heroFocalY`
   - 目前只影響 `/card/default/` 與 admin 主視覺預覽，不改原圖與 upload contract。
+- `styles.brandFontWeight` / `nameFontWeight` / `titleFontWeight` / `subtitleFontWeight` / `introFontWeight`
+  - Web 轉成 CSS `font-weight`，Flex 轉成平台可接受的 `regular` / `bold`。
+- `styles.buttonFontWeight`
+  - 只影響 `/card/default/` 網頁按鈕文字字重；LINE Flex 按鈕文字仍受平台限制。
+- `version.kind/versionId/publishedAt/liveSlug`
+  - `default` live row 與 snapshot row 共用同一個 `CardConfig` schema，靠 version metadata 區分目前是可編輯 live 還是 immutable snapshot。
 - `photo.alt`
   - 只影響 web `<img alt>` 與 admin preview。
 - `photo.link`
@@ -156,7 +165,7 @@
 ## 6. 核心檔案責任
 
 - `src/components/AdminPage.tsx`
-  UI、local draft、session restore、remote load/save/upload orchestration，以及 hero 圖片控制欄位與主視覺 / Flex 預覽。
+  UI、local draft、session restore、remote load/save/upload/publish orchestration，以及 hero 圖片控制欄位、字重控制、版本列表與主視覺 / Flex 預覽。
 - `src/components/admin-page-helpers.ts`
   AdminPage 純函式：draft 正規化、欄位錯誤、session label、upload 後 draft patch。
 - `src/lib/card-source.ts`
@@ -172,7 +181,7 @@
 - `src/lib/card-actions.ts`
   前台前兩顆 CTA 與第三顆 share button 組裝。
 - `gas/bound-card-backend/Code.gs`
-  正式資料來源與唯一 save/upload contract 定義。
+  正式資料來源與唯一 save/upload/publish contract 定義；snapshot 仍走同一個 exec URL。
 
 ## 7. 哪些檔案可安全擴充，哪些不適合直接亂改
 

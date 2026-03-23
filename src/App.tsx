@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AdminPage } from './components/AdminPage';
 import { CardPage } from './components/CardPage';
-import { defaultCardSlug, getCardBySlug } from './content/cards';
+import { defaultCardSlug } from './content/cards';
 import type { CardConfig } from './content/cards/types';
-import { getBundledPrimaryCard, loadRuntimeCard } from './lib/card-source';
+import { CardNotFoundError, getBundledPrimaryCard, loadRuntimeCard } from './lib/card-source';
 import { getAppHomePath, getCardPath, resolveAppRoute } from './lib/routes';
 import { applyBasicSeo } from './lib/seo';
 
@@ -52,10 +52,12 @@ function LoadingPage() {
 
 function RuntimeCardRoute({ slug }: { slug: string }) {
   const [config, setConfig] = useState<CardConfig | null>(null);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     let active = true;
     setConfig(null);
+    setMissing(false);
 
     void loadRuntimeCard(slug)
       .then((result) => {
@@ -63,8 +65,13 @@ function RuntimeCardRoute({ slug }: { slug: string }) {
           setConfig(result.config);
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (active) {
+          if (error instanceof CardNotFoundError) {
+            setMissing(true);
+            return;
+          }
+
           setConfig(getBundledPrimaryCard());
         }
       });
@@ -73,6 +80,10 @@ function RuntimeCardRoute({ slug }: { slug: string }) {
       active = false;
     };
   }, [slug]);
+
+  if (missing) {
+    return <NotFoundPage slug={slug} />;
+  }
 
   return config ? <CardPage config={config} /> : <LoadingPage />;
 }
@@ -89,8 +100,7 @@ export function App() {
   }
 
   if (route.kind === 'card') {
-    const card = getCardBySlug(route.slug);
-    return card ? <RuntimeCardRoute slug={route.slug} /> : <NotFoundPage slug={route.slug} />;
+    return <RuntimeCardRoute slug={route.slug} />;
   }
 
   return <NotFoundPage slug={route.slug} />;

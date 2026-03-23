@@ -16,6 +16,8 @@ export const FLEX_BUBBLE_SIZE_OPTIONS = ['kilo', 'mega', 'giga'] as const;
 export type HeroAspectRatioPreset = (typeof HERO_ASPECT_RATIO_OPTIONS)[number];
 export type HeroAspectModePreset = (typeof HERO_ASPECT_MODE_OPTIONS)[number];
 export type FlexBubbleSizePreset = (typeof FLEX_BUBBLE_SIZE_OPTIONS)[number];
+export const FONT_WEIGHT_OPTIONS = ['regular', 'medium', 'bold'] as const;
+export type FontWeightPreset = (typeof FONT_WEIGHT_OPTIONS)[number];
 
 export type CardStyleScope = 'both' | 'web' | 'flex' | 'system';
 
@@ -100,6 +102,15 @@ const cardStyleRegistry = [
     flexDefault: '12px',
   },
   {
+    key: 'brandFontWeight',
+    label: '品牌 / 小標字重',
+    scope: 'both',
+    helpText: '影響卡片品牌小標、區塊小標與 LINE 分享卡片品牌列字重。未填時沿用目前正式版外觀。',
+    placeholder: 'regular',
+    webDefault: '800',
+    flexDefault: 'bold',
+  },
+  {
     key: 'nameTextColor',
     label: '姓名字色',
     scope: 'both',
@@ -116,6 +127,15 @@ const cardStyleRegistry = [
     placeholder: '44',
     webDefault: 'clamp(2.5rem, 8vw, 4.6rem)',
     flexDefault: '28px',
+  },
+  {
+    key: 'nameFontWeight',
+    label: '姓名字重',
+    scope: 'both',
+    helpText: '影響主姓名在網頁與 LINE Flex 的字重。未填時沿用目前正式版外觀。',
+    placeholder: 'regular',
+    webDefault: '400',
+    flexDefault: 'bold',
   },
   {
     key: 'titleTextColor',
@@ -136,6 +156,15 @@ const cardStyleRegistry = [
     flexDefault: '14px',
   },
   {
+    key: 'titleFontWeight',
+    label: '職稱字重',
+    scope: 'both',
+    helpText: '影響職稱文字在網頁與 LINE Flex 的字重。未填時沿用目前正式版外觀。',
+    placeholder: 'regular',
+    webDefault: '400',
+    flexDefault: 'regular',
+  },
+  {
     key: 'subtitleTextColor',
     label: '副標字色',
     scope: 'both',
@@ -154,6 +183,15 @@ const cardStyleRegistry = [
     flexDefault: '13px',
   },
   {
+    key: 'subtitleFontWeight',
+    label: '副標字重',
+    scope: 'both',
+    helpText: '影響卡片副標與 LINE Flex 副標的字重。未填時沿用目前正式版外觀。',
+    placeholder: 'regular',
+    webDefault: '400',
+    flexDefault: 'regular',
+  },
+  {
     key: 'introTextColor',
     label: '內文字色',
     scope: 'both',
@@ -170,6 +208,15 @@ const cardStyleRegistry = [
     placeholder: '14',
     webDefault: '1rem',
     flexDefault: '14px',
+  },
+  {
+    key: 'introFontWeight',
+    label: '內文字重',
+    scope: 'both',
+    helpText: '影響介紹內文在網頁與 LINE Flex 的字重。未填時沿用目前正式版外觀。',
+    placeholder: 'regular',
+    webDefault: '400',
+    flexDefault: 'regular',
   },
   {
     key: 'headlineFontSize',
@@ -220,6 +267,14 @@ const cardStyleRegistry = [
     helpText: '只影響 `/card/default/` 網頁版 secondary 按鈕字色。未填時沿用預設樣式。',
     placeholder: '#18365f',
     webDefault: 'var(--accent)',
+  },
+  {
+    key: 'buttonFontWeight',
+    label: '按鈕文字字重',
+    scope: 'web',
+    helpText: '只影響 `/card/default/` 網頁版按鈕文字字重。LINE Flex 按鈕文字字重由平台控制。',
+    placeholder: 'regular',
+    webDefault: '700',
   },
   {
     key: 'buttonBorderRadius',
@@ -289,6 +344,9 @@ const isHeroAspectModePreset = (value: string): value is HeroAspectModePreset =>
 const isFlexBubbleSizePreset = (value: string): value is FlexBubbleSizePreset =>
   (FLEX_BUBBLE_SIZE_OPTIONS as readonly string[]).includes(value);
 
+const isFontWeightPreset = (value: string): value is FontWeightPreset =>
+  (FONT_WEIGHT_OPTIONS as readonly string[]).includes(value);
+
 const clampNumber = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 const getClampedNumberStyleValue = (
@@ -334,6 +392,29 @@ const normalizeLengthValue = (value: string): string => {
 
   if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
     return `${trimmed}px`;
+  }
+
+  return trimmed;
+};
+
+const FONT_WEIGHT_WEB_VALUE: Record<FontWeightPreset, string> = {
+  regular: '400',
+  medium: '500',
+  bold: '700',
+};
+
+const FONT_WEIGHT_FLEX_VALUE: Record<FontWeightPreset, 'regular' | 'bold'> = {
+  regular: 'regular',
+  medium: 'bold',
+  bold: 'bold',
+};
+
+const isFontWeightStyleKey = (key: keyof CardStylesConfig): boolean => key.endsWith('FontWeight');
+
+const normalizeFontWeightValue = (value: string, surface: 'web' | 'flex'): string => {
+  const trimmed = value.trim();
+  if (isFontWeightPreset(trimmed)) {
+    return surface === 'web' ? FONT_WEIGHT_WEB_VALUE[trimmed] : FONT_WEIGHT_FLEX_VALUE[trimmed];
   }
 
   return trimmed;
@@ -437,6 +518,10 @@ export const getResolvedCardStyleValue = (
     return normalizeLengthValue(rawValue) || '4px';
   }
 
+  if (isFontWeightStyleKey(key)) {
+    return normalizeFontWeightValue(rawValue, surface);
+  }
+
   if (
     key.endsWith('FontSize') ||
     key === 'sectionGap' ||
@@ -460,20 +545,26 @@ export const buildCardWebStyleVariables = (config: CardConfig): Record<string, s
     '--card-hero-object-position': heroTokens.objectPosition,
     '--card-brand-color': getResolvedCardStyleValue(config.styles, 'brandTextColor', 'web'),
     '--card-brand-size': getResolvedCardStyleValue(config.styles, 'brandFontSize', 'web'),
+    '--card-brand-weight': getResolvedCardStyleValue(config.styles, 'brandFontWeight', 'web'),
     '--card-name-color': getResolvedCardStyleValue(config.styles, 'nameTextColor', 'web'),
     '--card-name-size': getResolvedCardStyleValue(config.styles, 'nameFontSize', 'web'),
+    '--card-name-weight': getResolvedCardStyleValue(config.styles, 'nameFontWeight', 'web'),
     '--card-title-color': getResolvedCardStyleValue(config.styles, 'titleTextColor', 'web'),
     '--card-title-size': getResolvedCardStyleValue(config.styles, 'titleFontSize', 'web'),
+    '--card-title-weight': getResolvedCardStyleValue(config.styles, 'titleFontWeight', 'web'),
     '--card-subtitle-color': getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'web'),
     '--card-subtitle-size': getResolvedSubtitleSizeValue(config.styles),
+    '--card-subtitle-weight': getResolvedCardStyleValue(config.styles, 'subtitleFontWeight', 'web'),
     '--card-intro-color': getResolvedCardStyleValue(config.styles, 'introTextColor', 'web'),
     '--card-intro-size': getResolvedCardStyleValue(config.styles, 'introFontSize', 'web'),
+    '--card-intro-weight': getResolvedCardStyleValue(config.styles, 'introFontWeight', 'web'),
     '--card-headline-size': getResolvedCardStyleValue(config.styles, 'headlineFontSize', 'web'),
     '--card-subheadline-size': getResolvedSubtitleSizeValue(config.styles),
     '--card-primary-button-bg': getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'web'),
     '--card-primary-button-color': getResolvedCardStyleValue(config.styles, 'primaryButtonTextColor', 'web'),
     '--card-secondary-button-bg': getResolvedCardStyleValue(config.styles, 'secondaryButtonBackgroundColor', 'web'),
     '--card-secondary-button-color': getResolvedCardStyleValue(config.styles, 'secondaryButtonTextColor', 'web'),
+    '--card-button-weight': getResolvedCardStyleValue(config.styles, 'buttonFontWeight', 'web'),
     '--card-button-radius': getResolvedCardStyleValue(config.styles, 'buttonBorderRadius', 'web'),
     '--card-section-gap': getResolvedCardStyleValue(config.styles, 'sectionGap', 'web'),
     '--card-surface-padding': getResolvedCardStyleValue(config.styles, 'cardPadding', 'web'),
@@ -486,14 +577,19 @@ export type FlexStyleTokens = {
   heroAspectMode: HeroAspectModePreset;
   brandTextColor: string;
   brandFontSize: string;
+  brandFontWeight: 'regular' | 'bold';
   nameTextColor: string;
   nameFontSize: string;
+  nameFontWeight: 'regular' | 'bold';
   titleTextColor: string;
   titleFontSize: string;
+  titleFontWeight: 'regular' | 'bold';
   subtitleTextColor: string;
   subtitleFontSize: string;
+  subtitleFontWeight: 'regular' | 'bold';
   introTextColor: string;
   introFontSize: string;
+  introFontWeight: 'regular' | 'bold';
   primaryButtonBackgroundColor: string;
   primaryButtonTextColor: string;
   sectionGap: string;
@@ -510,14 +606,19 @@ export const buildFlexStyleTokens = (config: CardConfig): FlexStyleTokens => {
     heroAspectMode: heroTokens.aspectMode,
     brandTextColor: getResolvedCardStyleValue(config.styles, 'brandTextColor', 'flex'),
     brandFontSize: getResolvedCardStyleValue(config.styles, 'brandFontSize', 'flex'),
+    brandFontWeight: getResolvedCardStyleValue(config.styles, 'brandFontWeight', 'flex') as 'regular' | 'bold',
     nameTextColor: getResolvedCardStyleValue(config.styles, 'nameTextColor', 'flex'),
     nameFontSize: getResolvedCardStyleValue(config.styles, 'nameFontSize', 'flex'),
+    nameFontWeight: getResolvedCardStyleValue(config.styles, 'nameFontWeight', 'flex') as 'regular' | 'bold',
     titleTextColor: getResolvedCardStyleValue(config.styles, 'titleTextColor', 'flex'),
     titleFontSize: getResolvedCardStyleValue(config.styles, 'titleFontSize', 'flex'),
+    titleFontWeight: getResolvedCardStyleValue(config.styles, 'titleFontWeight', 'flex') as 'regular' | 'bold',
     subtitleTextColor: getResolvedCardStyleValue(config.styles, 'subtitleTextColor', 'flex'),
     subtitleFontSize: getResolvedCardStyleValue(config.styles, 'subtitleFontSize', 'flex'),
+    subtitleFontWeight: getResolvedCardStyleValue(config.styles, 'subtitleFontWeight', 'flex') as 'regular' | 'bold',
     introTextColor: getResolvedCardStyleValue(config.styles, 'introTextColor', 'flex'),
     introFontSize: getResolvedCardStyleValue(config.styles, 'introFontSize', 'flex'),
+    introFontWeight: getResolvedCardStyleValue(config.styles, 'introFontWeight', 'flex') as 'regular' | 'bold',
     primaryButtonBackgroundColor: getResolvedCardStyleValue(config.styles, 'primaryButtonBackgroundColor', 'flex'),
     primaryButtonTextColor: getResolvedCardStyleValue(config.styles, 'primaryButtonTextColor', 'flex'),
     sectionGap: getResolvedCardStyleValue(config.styles, 'sectionGap', 'flex'),

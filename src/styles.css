@@ -97,7 +97,7 @@ button:disabled {
 .section-label {
   margin: 0;
   font-size: var(--card-brand-size, 0.76rem);
-  font-weight: 800;
+  font-weight: var(--card-brand-weight, 800);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--card-brand-color, #66758b);
@@ -116,6 +116,7 @@ button:disabled {
 
 .person-name {
   font-size: var(--card-name-size, clamp(2.5rem, 8vw, 4.6rem));
+  font-weight: var(--card-name-weight, 400);
   line-height: 0.94;
   letter-spacing: -0.05em;
   color: var(--card-name-color, var(--ink));
@@ -123,6 +124,7 @@ button:disabled {
 
 .person-title {
   font-size: var(--card-title-size, 1.08rem);
+  font-weight: var(--card-title-weight, 400);
   color: var(--card-title-color, var(--muted));
 }
 
@@ -135,6 +137,7 @@ button:disabled {
 .subheadline {
   margin: 0;
   font-size: var(--card-subtitle-size, var(--card-subheadline-size, 1rem));
+  font-weight: var(--card-subtitle-weight, 400);
   line-height: 1.65;
   color: var(--card-subtitle-color, var(--muted));
 }
@@ -149,6 +152,7 @@ button:disabled {
 .intro {
   max-width: 58ch;
   font-size: var(--card-intro-size, 1rem);
+  font-weight: var(--card-intro-weight, 400);
   line-height: 1.78;
   white-space: pre-line;
   color: var(--card-intro-color, var(--muted));
@@ -280,7 +284,7 @@ button:disabled {
   padding: 14px 18px;
   border-radius: var(--card-button-radius, 18px);
   border: 1px solid transparent;
-  font-weight: 700;
+  font-weight: var(--card-button-weight, 700);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,

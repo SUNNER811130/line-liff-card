@@ -5,8 +5,11 @@ import {
   buildCardApiUrl,
   createCardApiPostInit,
   type CreateAdminSessionRequest,
+  extractCardsFromEnvelope,
   extractConfigFromEnvelope,
+  type CardRecordSummary,
   getCardApiErrorMessage,
+  type PublishSnapshotRequest,
   requireAdminSessionToken,
   requireCardApiBaseUrl,
   readCardApiJsonResponse,
@@ -29,6 +32,8 @@ export type SaveRuntimeCardResult = {
   slug: string;
   updatedAt?: string;
   updatedBy?: string;
+  versionId?: string;
+  publishedAt?: string;
 };
 
 export type AdminSessionResult = {
@@ -51,6 +56,13 @@ export type UploadedImageResult = {
   updatedBy?: string;
 };
 
+export class CardNotFoundError extends Error {
+  constructor(slug: string) {
+    super(`找不到 slug「${slug}」對應的正式卡片。`);
+    this.name = 'CardNotFoundError';
+  }
+}
+
 const DEFAULT_FETCH: FetchLike = (...args) => fetch(...args);
 
 /**
@@ -68,6 +80,9 @@ const validateRemoteConfig = (config: unknown, expectedSlug: string): CardConfig
 
   return config;
 };
+
+const isCardNotFoundError = (error: unknown): boolean =>
+  error instanceof Error && /Card not found|找不到.+正式卡片/.test(error.message);
 export const getBundledRuntimeCard = (slug: string): CardConfig | undefined =>
   getBundledCardBySlug(getCanonicalCardSlug(slug));
 
@@ -92,7 +107,12 @@ export async function fetchRemoteCardConfig(
   const payload = await readCardApiJsonResponse(response);
 
   if (!response.ok || payload.ok === false) {
-    throw new Error(getCardApiErrorMessage(payload, `載入正式資料失敗（${response.status}）。`));
+    const message = getCardApiErrorMessage(payload, `載入正式資料失敗（${response.status}）。`);
+    if (/Card not found/i.test(message)) {
+      throw new CardNotFoundError(expectedSlug);
+    }
+
+    throw new Error(message);
   }
 
   const remoteConfig = extractConfigFromEnvelope(payload);
@@ -112,8 +132,8 @@ export async function loadRuntimeCard(
   } = {},
 ): Promise<RuntimeCardResult> {
   const bundled = getBundledRuntimeCard(slug);
-  if (!bundled) {
-    throw new Error(`找不到 slug「${slug}」對應的 bundled card。`);
+  if (!bundled && !(options.baseUrl ?? getCardApiBaseUrl()).trim()) {
+    throw new CardNotFoundError(slug);
   }
 
   try {
@@ -124,6 +144,14 @@ export async function loadRuntimeCard(
       message: '已載入正式後台資料。',
     };
   } catch (error) {
+    if (!bundled) {
+      if (isCardNotFoundError(error)) {
+        throw error;
+      }
+
+      throw new Error(error instanceof Error ? error.message : `載入 slug「${slug}」失敗。`);
+    }
+
     return {
       config: bundled,
       source: 'bundled',
@@ -167,6 +195,52 @@ export async function saveRemoteCardConfig(
     slug: expectedSlug,
     updatedAt: 'updatedAt' in payload ? payload.updatedAt : undefined,
     updatedBy: 'updatedBy' in payload ? payload.updatedBy : undefined,
+    versionId: 'versionId' in payload ? payload.versionId : undefined,
+    publishedAt: 'publishedAt' in payload ? payload.publishedAt : undefined,
+  };
+}
+
+export async function publishSnapshotCard(
+  slug: string,
+  config: CardConfig,
+  options: {
+    baseUrl?: string;
+    adminSession: string;
+    updatedBy?: string;
+    fetchImpl?: FetchLike;
+  },
+): Promise<SaveRuntimeCardResult> {
+  const expectedSlug = getCanonicalCardSlug(slug || config.slug || defaultCardSlug);
+  const baseUrl = requireCardApiBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
+  const adminSession = requireAdminSessionToken(options.adminSession);
+  const validatedConfig = validateRemoteConfig(config, expectedSlug);
+  const requestBody: PublishSnapshotRequest = {
+    action: 'publishSnapshot',
+    slug: expectedSlug,
+    config: validatedConfig,
+    updatedBy: options.updatedBy?.trim() ?? '',
+    adminSession,
+  };
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(baseUrl, createCardApiPostInit(requestBody));
+  const payload = await readCardApiJsonResponse(response);
+
+  if (!response.ok || payload.ok === false) {
+    throw new Error(getCardApiErrorMessage(payload, `發佈快照失敗（${response.status}）。`));
+  }
+
+  const responseConfig = extractConfigFromEnvelope(payload);
+  if (responseConfig === undefined) {
+    throw new Error('後台沒有回傳快照 config。');
+  }
+
+  const snapshotSlug = 'slug' in payload && typeof payload.slug === 'string' && payload.slug ? payload.slug : expectedSlug;
+  return {
+    config: validateRemoteConfig(responseConfig, snapshotSlug),
+    slug: snapshotSlug,
+    updatedAt: 'updatedAt' in payload ? payload.updatedAt : undefined,
+    updatedBy: 'updatedBy' in payload ? payload.updatedBy : undefined,
+    versionId: 'versionId' in payload ? payload.versionId : undefined,
+    publishedAt: 'publishedAt' in payload ? payload.publishedAt : undefined,
   };
 }
 
@@ -298,4 +372,45 @@ export async function uploadRuntimeImage(
     updatedAt: successPayload.updatedAt,
     updatedBy: successPayload.updatedBy,
   };
+}
+
+export async function listRemoteCards(
+  options: {
+    baseUrl?: string;
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+  } = {},
+): Promise<CardRecordSummary[]> {
+  const baseUrl = requireCardApiBaseUrl(options.baseUrl ?? getCardApiBaseUrl());
+  const response = await (options.fetchImpl ?? DEFAULT_FETCH)(buildCardApiUrl(baseUrl, { action: 'listCards' }), {
+    method: 'GET',
+    cache: 'no-store',
+    signal: options.signal,
+  });
+  const payload = await readCardApiJsonResponse(response);
+
+  if (!response.ok || payload.ok === false) {
+    throw new Error(getCardApiErrorMessage(payload, `載入版本列表失敗（${response.status}）。`));
+  }
+
+  const cards = extractCardsFromEnvelope(payload);
+  if (!Array.isArray(cards)) {
+    throw new Error('後台沒有回傳版本列表。');
+  }
+
+  return cards.map((card) => {
+    if (!card || typeof card !== 'object') {
+      throw new Error('版本列表格式不正確。');
+    }
+
+    const record = card as Record<string, unknown>;
+    return {
+      slug: String(record.slug || ''),
+      isLive: record.isLive === true,
+      versionId: typeof record.versionId === 'string' ? record.versionId : undefined,
+      publishedAt: typeof record.publishedAt === 'string' ? record.publishedAt : undefined,
+      updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
+      updatedBy: typeof record.updatedBy === 'string' ? record.updatedBy : undefined,
+    };
+  });
 }

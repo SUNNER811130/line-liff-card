@@ -100,7 +100,7 @@ const buildFlexBodyContents = (config: CardConfig) => {
       type: 'text' as const,
       text: config.content.brandName,
       size: styleTokens.brandFontSize,
-      weight: 'bold' as const,
+      weight: styleTokens.brandFontWeight,
       color: styleTokens.brandTextColor,
     },
     {
@@ -108,7 +108,7 @@ const buildFlexBodyContents = (config: CardConfig) => {
       text: config.content.fullName,
       margin: styleTokens.titleSubtitleGap,
       size: styleTokens.nameFontSize,
-      weight: 'bold' as const,
+      weight: styleTokens.nameFontWeight,
       color: styleTokens.nameTextColor,
     },
     {
@@ -116,6 +116,7 @@ const buildFlexBodyContents = (config: CardConfig) => {
       text: config.content.title,
       margin: styleTokens.titleSubtitleGap,
       size: styleTokens.titleFontSize,
+      weight: styleTokens.titleFontWeight,
       color: styleTokens.titleTextColor,
     },
     ...(subtitle
@@ -126,6 +127,7 @@ const buildFlexBodyContents = (config: CardConfig) => {
             wrap: true,
             margin: styleTokens.titleSubtitleGap,
             size: styleTokens.subtitleFontSize,
+            weight: styleTokens.subtitleFontWeight,
             color: styleTokens.subtitleTextColor,
           },
         ]
@@ -136,6 +138,7 @@ const buildFlexBodyContents = (config: CardConfig) => {
       wrap: true,
       margin: styleTokens.sectionGap,
       size: styleTokens.introFontSize,
+      weight: styleTokens.introFontWeight,
       color: styleTokens.introTextColor,
       lineSpacing: styleTokens.bodyLineHeight,
     },

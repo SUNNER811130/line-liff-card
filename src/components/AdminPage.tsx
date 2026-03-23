@@ -35,11 +35,14 @@ import {
   createAdminSession,
   fetchRemoteCardConfig,
   getCardApiBaseUrl,
+  listRemoteCards,
+  publishSnapshotCard,
   saveRemoteCardConfig,
   uploadRuntimeImage,
   verifyAdminSession,
 } from '../lib/card-source';
 import { prepareImageUpload } from '../lib/image-upload';
+import type { CardRecordSummary } from '../lib/card-admin-api';
 import { applyBasicSeo } from '../lib/seo';
 import { isAllowedLink, isHttpUrl, validateCardConfig } from '../lib/card-validation';
 import {
@@ -55,6 +58,7 @@ import {
 import {
   buildCardHeroStyleTokens,
   FLEX_BUBBLE_SIZE_OPTIONS,
+  FONT_WEIGHT_OPTIONS,
   FLEX_HERO_IMAGE_ASPECT_RATIO,
   FLEX_HERO_IMAGE_MIN_HEIGHT,
   FLEX_HERO_IMAGE_MIN_WIDTH,
@@ -66,6 +70,7 @@ import {
   HERO_ASPECT_RATIO_OPTIONS,
 } from '../lib/card-style-registry';
 import { getPreviewAssetUrl } from '../lib/runtime';
+import { getCardWebUrl } from '../lib/routes';
 
 type FieldProps = {
   label: string;
@@ -128,6 +133,29 @@ const actionToneOptions: CardActionTone[] = ['primary', 'secondary'];
 const heroAspectRatioOptions = [...HERO_ASPECT_RATIO_OPTIONS];
 const heroAspectModeOptions = [...HERO_ASPECT_MODE_OPTIONS];
 const flexBubbleSizeOptions = [...FLEX_BUBBLE_SIZE_OPTIONS];
+const fontWeightOptions = [...FONT_WEIGHT_OPTIONS];
+
+type AdminSelectOption = {
+  value: string;
+  label: string;
+};
+
+const fontWeightOptionLabels: Record<(typeof FONT_WEIGHT_OPTIONS)[number], string> = {
+  regular: '一般',
+  medium: '中等',
+  bold: '粗體',
+};
+
+const fontWeightSelectOptions: AdminSelectOption[] = fontWeightOptions.map((option) => ({
+  value: option,
+  label: fontWeightOptionLabels[option],
+}));
+
+const toSelectOptions = (options: string[]): AdminSelectOption[] =>
+  options.map((option) => ({
+    value: option,
+    label: option,
+  }));
 
 const openExternalUrl = (url: string) => {
   window.open(url, '_blank', 'noopener,noreferrer');
@@ -428,7 +456,7 @@ function AdminFlexPreviewCard({ config }: { config: CardConfig }) {
                   color: item.color,
                   marginTop: index === 0 ? '0' : item.margin ?? '6px',
                   fontSize: item.size,
-                  fontWeight: item.weight === 'bold' ? 700 : 500,
+                  fontWeight: item.weight === 'bold' ? 700 : 400,
                 }}
               >
                 {item.text}
@@ -545,7 +573,7 @@ function AdminSelectField({
   onChange: (value: string) => void;
   helpText: string;
   badgeLabel: string;
-  options: string[];
+  options: AdminSelectOption[];
 }) {
   return (
     <label className="admin-field">
@@ -555,8 +583,8 @@ function AdminSelectField({
       </span>
       <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
+          <option key={option.value} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>
@@ -666,6 +694,9 @@ export function AdminPage() {
   const [assetUploadStatus, setAssetUploadStatus] = useState<AssetUploadState>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | undefined>(undefined);
   const [lastSavedBy, setLastSavedBy] = useState<string | undefined>(undefined);
+  const [versionRecords, setVersionRecords] = useState<CardRecordSummary[]>([]);
+  const [versionStatus, setVersionStatus] = useState<StatusMessage | null>(null);
+  const [lastPublishedSnapshot, setLastPublishedSnapshot] = useState<CardRecordSummary | null>(null);
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
   const draftSnapshot = useMemo(() => serializeCardConfig(draft), [draft]);
@@ -691,6 +722,20 @@ export function AdminPage() {
     }) as CSSProperties,
     [heroStyleTokens],
   );
+  const currentCardRecord = useMemo(() => {
+    const isLive = draft.slug === 'default' && draft.version?.kind !== 'snapshot';
+
+    return {
+      slug: draft.slug,
+      isLive,
+      versionId: draft.version?.versionId ?? '',
+      publishedAt: draft.version?.publishedAt ?? '',
+    };
+  }, [draft]);
+  const currentShareUrl = useMemo(() => getCardWebUrl(draft.slug), [draft.slug]);
+  const liveShareUrl = useMemo(() => getCardWebUrl('default'), []);
+  const currentSnapshotShareSlug = currentCardRecord.isLive ? lastPublishedSnapshot?.slug ?? '' : draft.slug;
+  const currentSnapshotShareUrl = currentSnapshotShareSlug ? getCardWebUrl(currentSnapshotShareSlug) : '';
 
   useEffect(() => {
     applyBasicSeo(ADMIN_TITLE, ADMIN_DESCRIPTION);
@@ -751,6 +796,16 @@ export function AdminPage() {
     };
   }, [hasUnsavedChanges]);
 
+  useEffect(() => {
+    if (!isUnlocked || !apiBaseUrl.trim()) {
+      return;
+    }
+
+    void refreshVersionList();
+  // refreshVersionList is intentionally recreated from current state; this effect only gates on unlock/base URL.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl, isUnlocked]);
+
   const clearAdminSession = () => {
     setAdminSession('');
     setSessionExpiresAt('');
@@ -778,6 +833,76 @@ export function AdminPage() {
     setDraftRestoreState(null);
     setLocalDraftNote(note);
   };
+
+  const refreshVersionList = async () => {
+    if (!apiBaseUrl.trim()) {
+      return;
+    }
+
+    try {
+      const records = await listRemoteCards({ baseUrl: apiBaseUrl });
+      setVersionRecords(records);
+      setVersionStatus(records.length
+        ? {
+            tone: 'success',
+            text: `已載入 ${records.length} 筆 live / snapshot 版本資訊。`,
+          }
+        : {
+            tone: 'info',
+            text: '目前還沒有任何 snapshot，只有 live/default。',
+          });
+    } catch (error) {
+      setVersionStatus({
+        tone: 'error',
+        text: error instanceof Error ? error.message : '載入版本列表失敗。',
+      });
+    }
+  };
+
+  const copyShareUrl = async (url: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setVersionStatus({
+        tone: 'success',
+        text: successMessage,
+      });
+    } catch {
+      setVersionStatus({
+        tone: 'error',
+        text: '目前無法直接複製連結，請稍後再試。',
+      });
+    }
+  };
+
+  const shareLink = async (url: string, title: string, fallbackMessage: string) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          url,
+        });
+        setVersionStatus({
+          tone: 'success',
+          text: '已開啟分享視窗。',
+        });
+        return;
+      } catch {
+        // Fall through to copy when share sheet is unavailable or dismissed.
+      }
+    }
+
+    await copyShareUrl(url, fallbackMessage);
+  };
+
+  const buildLiveDraftForBaseline = (config: CardConfig): CardConfig =>
+    normalizeLoadedDraft({
+      ...config,
+      version: {
+        kind: 'live',
+        liveSlug: config.slug,
+        sourceSlug: config.slug,
+      },
+    });
 
   const patchDraft = (updater: (current: CardConfig) => CardConfig) => {
     setDraft((current) => coerceDraft(updater(current)));
@@ -995,7 +1120,7 @@ export function AdminPage() {
             onChange={(value) => updateStyle('heroAspectRatio', value)}
             helpText={field.helpText}
             badgeLabel={visibilityScopeLabel[field.visibilityScope]}
-            options={heroAspectRatioOptions}
+            options={toSelectOptions(heroAspectRatioOptions)}
           />
         );
       case 'styles.heroAspectMode':
@@ -1007,7 +1132,7 @@ export function AdminPage() {
             onChange={(value) => updateStyle('heroAspectMode', value)}
             helpText={field.helpText}
             badgeLabel={visibilityScopeLabel[field.visibilityScope]}
-            options={heroAspectModeOptions}
+            options={toSelectOptions(heroAspectModeOptions)}
           />
         );
       case 'styles.flexBubbleSize':
@@ -1019,7 +1144,7 @@ export function AdminPage() {
             onChange={(value) => updateStyle('flexBubbleSize', value)}
             helpText={field.helpText}
             badgeLabel={visibilityScopeLabel[field.visibilityScope]}
-            options={flexBubbleSizeOptions}
+            options={toSelectOptions(flexBubbleSizeOptions)}
           />
         );
       case 'styles.heroZoom':
@@ -1093,7 +1218,7 @@ export function AdminPage() {
             onChange={(value) => updateActionTone(0, value)}
             helpText={field.helpText}
             badgeLabel={visibilityScopeLabel[field.visibilityScope]}
-            options={actionToneOptions}
+            options={toSelectOptions(actionToneOptions)}
           />
         );
       case 'actions.0.enabled':
@@ -1128,7 +1253,7 @@ export function AdminPage() {
             onChange={(value) => updateActionTone(1, value)}
             helpText={field.helpText}
             badgeLabel={visibilityScopeLabel[field.visibilityScope]}
-            options={actionToneOptions}
+            options={toSelectOptions(actionToneOptions)}
           />
         );
       case 'actions.1.enabled':
@@ -1158,22 +1283,82 @@ export function AdminPage() {
         return renderColorStyleField(field, 'brandTextColor');
       case 'styles.brandFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'brandFontSize'), (value) => updateStyle('brandFontSize', value));
+      case 'styles.brandFontWeight':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'brandFontWeight') || 'bold'}
+            onChange={(value) => updateStyle('brandFontWeight', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={fontWeightSelectOptions}
+          />
+        );
       case 'styles.nameTextColor':
         return renderColorStyleField(field, 'nameTextColor');
       case 'styles.nameFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'nameFontSize'), (value) => updateStyle('nameFontSize', value));
+      case 'styles.nameFontWeight':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'nameFontWeight') || 'regular'}
+            onChange={(value) => updateStyle('nameFontWeight', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={fontWeightSelectOptions}
+          />
+        );
       case 'styles.titleTextColor':
         return renderColorStyleField(field, 'titleTextColor');
       case 'styles.titleFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'titleFontSize'), (value) => updateStyle('titleFontSize', value));
+      case 'styles.titleFontWeight':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'titleFontWeight') || 'regular'}
+            onChange={(value) => updateStyle('titleFontWeight', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={fontWeightSelectOptions}
+          />
+        );
       case 'styles.subtitleTextColor':
         return renderColorStyleField(field, 'subtitleTextColor');
       case 'styles.subtitleFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'subtitleFontSize'), (value) => updateStyle('subtitleFontSize', value));
+      case 'styles.subtitleFontWeight':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'subtitleFontWeight') || 'regular'}
+            onChange={(value) => updateStyle('subtitleFontWeight', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={fontWeightSelectOptions}
+          />
+        );
       case 'styles.introTextColor':
         return renderColorStyleField(field, 'introTextColor');
       case 'styles.introFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'introFontSize'), (value) => updateStyle('introFontSize', value));
+      case 'styles.introFontWeight':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'introFontWeight') || 'regular'}
+            onChange={(value) => updateStyle('introFontWeight', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={fontWeightSelectOptions}
+          />
+        );
       case 'styles.headlineFontSize':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'headlineFontSize'), (value) => updateStyle('headlineFontSize', value));
       case 'styles.subheadlineFontSize':
@@ -1186,6 +1371,18 @@ export function AdminPage() {
         return renderColorStyleField(field, 'secondaryButtonBackgroundColor');
       case 'styles.secondaryButtonTextColor':
         return renderColorStyleField(field, 'secondaryButtonTextColor');
+      case 'styles.buttonFontWeight':
+        return (
+          <AdminSelectField
+            key={field.key}
+            label={field.label}
+            value={getCardStyleInputValue(draft.styles, 'buttonFontWeight') || 'bold'}
+            onChange={(value) => updateStyle('buttonFontWeight', value)}
+            helpText={field.helpText}
+            badgeLabel={visibilityScopeLabel[field.visibilityScope]}
+            options={fontWeightSelectOptions}
+          />
+        );
       case 'styles.buttonBorderRadius':
         return renderTextField(field, getCardStyleInputValue(draft.styles, 'buttonBorderRadius'), (value) => updateStyle('buttonBorderRadius', value));
       case 'styles.sectionGap':
@@ -1375,6 +1572,7 @@ export function AdminPage() {
         tone: 'success',
         text: `已載入 slug「${remoteConfig.slug}」的正式資料。`,
       });
+      await refreshVersionList();
     } catch (error) {
       setRemoteStatus({
         tone: 'error',
@@ -1482,6 +1680,14 @@ export function AdminPage() {
       return;
     }
 
+    if (!currentCardRecord.isLive) {
+      setRemoteStatus({
+        tone: 'error',
+        text: '目前載入的是 snapshot，不能直接覆寫。請先切回 live/default 再儲存。',
+      });
+      return;
+    }
+
     if (validationErrors.length > 0) {
       setRemoteStatus({
         tone: 'error',
@@ -1508,10 +1714,114 @@ export function AdminPage() {
         tone: 'success',
         text: formatSaveMessage(result.updatedAt, result.updatedBy),
       });
+      await refreshVersionList();
     } catch (error) {
       setRemoteStatus({
         tone: 'error',
         text: handleProtectedActionError(error, '儲存正式名片失敗。'),
+      });
+    }
+  };
+
+  const handleLoadCardVersion = async (slug: string) => {
+    if (!adminSession.trim()) {
+      setVersionStatus({
+        tone: 'error',
+        text: '請先完成管理員解鎖，再載入版本。',
+      });
+      return;
+    }
+
+    if (hasUnsavedChanges && !window.confirm('目前有尚未儲存的變更，切換版本會覆蓋本地草稿。要繼續嗎？')) {
+      return;
+    }
+
+    setVersionStatus({
+      tone: 'info',
+      text: `正在載入版本「${slug}」...`,
+    });
+
+    try {
+      const remoteConfig = await fetchRemoteCardConfig(slug, {
+        baseUrl: apiBaseUrl,
+      });
+      applyOfficialConfig(remoteConfig, `已切換到 slug「${slug}」的版本內容。`);
+      setVersionStatus({
+        tone: 'success',
+        text: `已載入版本「${slug}」。`,
+      });
+    } catch (error) {
+      setVersionStatus({
+        tone: 'error',
+        text: handleProtectedActionError(error, '載入版本失敗。'),
+      });
+    }
+  };
+
+  const handlePublishSnapshot = async () => {
+    if (!adminSession.trim()) {
+      setVersionStatus({
+        tone: 'error',
+        text: '請先完成管理員解鎖，才能發佈快照。',
+      });
+      return;
+    }
+
+    if (!currentCardRecord.isLive) {
+      setVersionStatus({
+        tone: 'error',
+        text: '目前載入的是 snapshot，不能再發佈。請先切回 live/default。',
+      });
+      return;
+    }
+
+    if (validationErrors.length > 0) {
+      setVersionStatus({
+        tone: 'error',
+        text: '目前欄位仍有錯誤，請先修正後再發佈快照。',
+      });
+      return;
+    }
+
+    setVersionStatus({
+      tone: 'info',
+      text: '正在將目前 live/default 發佈為 immutable snapshot...',
+    });
+
+    try {
+      const result = await publishSnapshotCard(draft.slug, draft, {
+        baseUrl: apiBaseUrl,
+        adminSession,
+        updatedBy,
+      });
+      const nextLiveDraft = buildLiveDraftForBaseline(draft);
+      setDraft(nextLiveDraft);
+      setBaselineConfig(cloneCardConfig(nextLiveDraft));
+      setDraftRestoreState(null);
+      setLastSavedAt(result.updatedAt);
+      setLastSavedBy(result.updatedBy);
+      setLastPublishedSnapshot({
+        slug: result.slug,
+        isLive: false,
+        versionId: result.versionId,
+        publishedAt: result.publishedAt,
+        updatedAt: result.updatedAt,
+        updatedBy: result.updatedBy,
+      });
+      setLocalDraftNote('目前 live/default 已同步儲存，並成功發佈一份不可變更的 snapshot。');
+      setRemoteStatus({
+        tone: 'success',
+        text: `已儲存 live/default，並發佈 snapshot「${result.slug}」。`,
+      });
+      setVersionStatus({
+        tone: 'success',
+        text: `已發佈 snapshot「${result.slug}」。`,
+      });
+      await refreshVersionList();
+    } catch (error) {
+      setVersionStatus({
+        tone: 'error',
+        text: handleProtectedActionError(error, '發佈 snapshot 失敗。'),
       });
     }
   };
@@ -1606,6 +1916,15 @@ export function AdminPage() {
       return;
     }
 
+    if (!currentCardRecord.isLive) {
+      setAssetUploadStatus({
+        activeField: field,
+        tone: 'error',
+        text: '目前載入的是 snapshot；快照不可變更，請先切回 live/default。',
+      });
+      return;
+    }
+
     if (field === 'photo') {
       photoUploadInputRef.current?.click();
       return;
@@ -1650,6 +1969,7 @@ export function AdminPage() {
         tone: 'success',
         text: `圖片已上傳到 Google Drive，並同步寫入正式 ${field === 'photo' ? 'photo.src' : 'seo.ogImage'}。`,
       });
+      await refreshVersionList();
     } catch (error) {
       setAssetUploadStatus({
         activeField: field,
@@ -1666,7 +1986,7 @@ export function AdminPage() {
           <p className="eyebrow">Admin Console</p>
           <h1 className="admin-title">正式電子名片後台</h1>
           <p className="admin-copy">
-            這裡是正式 runtime config 管理台。解鎖後即可直接編輯文字、按鈕、分享文案與圖片資產，儲存後會同步影響前台卡片與 LINE 分享 Flex。
+            這裡是正式 runtime config 管理台。解鎖後可維護最新 live/default，並將當下內容發佈成可長期分享的 snapshot permalink。
           </p>
         </div>
         <div className="admin-note-card">
@@ -1744,6 +2064,74 @@ export function AdminPage() {
             </section>
           ) : null}
 
+          <section className="admin-panel admin-panel-spacious">
+            <div className="admin-section-heading">
+              <p className="section-label">版本操作</p>
+              <h2 className="admin-panel-title">live/default 與 snapshot 發佈</h2>
+              <p className="support-copy">`default` 仍是最新 live 版本；每次發佈會複製目前內容，產生一張不可變更的 snapshot permalink。</p>
+            </div>
+            <div className="admin-field-grid">
+              <div className="admin-info-card">
+                <p className="section-label">目前模式</p>
+                <p className="support-copy">{currentCardRecord.isLive ? 'live/default' : 'snapshot'}</p>
+                <p className="support-copy">{`slug：${currentCardRecord.slug}`}</p>
+                <p className="support-copy">{currentCardRecord.versionId ? `versionId：${currentCardRecord.versionId}` : '目前尚未綁定 snapshot versionId。'}</p>
+                <p className="support-copy">{currentCardRecord.publishedAt ? `發佈時間：${currentCardRecord.publishedAt}` : '目前是 live/default。'}</p>
+              </div>
+              <div className="admin-info-card">
+                <p className="section-label">目前分享連結</p>
+                <p className="support-copy">{currentShareUrl}</p>
+                {lastPublishedSnapshot ? (
+                  <p className="support-copy">{`最近發佈 snapshot：${lastPublishedSnapshot.slug}`}</p>
+                ) : (
+                  <p className="support-copy">尚未在本分頁發佈新的 snapshot。</p>
+                )}
+              </div>
+            </div>
+            <div className="admin-inline-actions admin-inline-actions-3">
+              <button type="button" className="action-button action-button-primary" onClick={() => void handlePublishSnapshot()} disabled={!currentCardRecord.isLive}>
+                發佈為新版本
+              </button>
+              <button type="button" className="action-button action-button-secondary" onClick={() => void copyShareUrl(currentShareUrl, '已複製目前分享連結。')}>
+                複製目前分享連結
+              </button>
+              <button type="button" className="action-button action-button-secondary" onClick={() => void shareLink(liveShareUrl, `${draft.content.fullName}｜live`, '已複製最新 live 連結。')}>
+                分享最新 live
+              </button>
+              <button
+                type="button"
+                className="action-button action-button-secondary"
+                onClick={() => void shareLink(currentSnapshotShareUrl, `${draft.content.fullName}｜snapshot`, '已複製 snapshot permalink。')}
+                disabled={!currentSnapshotShareUrl}
+              >
+                分享此快照
+              </button>
+              <button type="button" className="action-button action-button-secondary" onClick={() => void handleLoadCardVersion('default')} disabled={currentCardRecord.isLive}>
+                切回 live/default
+              </button>
+            </div>
+            <StatusBanner status={versionStatus} />
+            <div className="admin-info-card">
+              <p className="section-label">版本列表</p>
+              {versionRecords.length ? (
+                <div className="admin-inline-actions admin-inline-actions-3">
+                  {versionRecords.map((record) => (
+                    <button
+                      key={record.slug}
+                      type="button"
+                      className="action-button action-button-secondary"
+                      onClick={() => void handleLoadCardVersion(record.slug)}
+                    >
+                      {record.isLive ? `live｜${record.slug}` : `${record.slug}${record.publishedAt ? `｜${record.publishedAt}` : ''}`}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="support-copy">目前尚未載入任何版本資訊。</p>
+              )}
+            </div>
+          </section>
+
           <section className="admin-layout">
             <div className="admin-form-column">
               {renderSection(
@@ -1791,6 +2179,7 @@ export function AdminPage() {
                   <div className="admin-info-card">
                     <p className="section-label">解鎖狀態</p>
                     <p className="support-copy">{isUnlocked ? '目前已解鎖，可儲存與上傳圖片。' : '尚未解鎖，儲存與圖片上傳會被擋下。'}</p>
+                    <p className="support-copy">{currentCardRecord.isLive ? '目前是 live/default，可儲存與發佈。' : '目前是 snapshot，只建議檢視與分享，不可儲存或上傳。'}</p>
                     <p className="support-copy">{sessionExpiresAt ? `Session 到期：${sessionExpiresAt}` : '本分頁沒有有效 session。'}</p>
                   </div>
                   <div className="admin-info-card">
@@ -1806,7 +2195,7 @@ export function AdminPage() {
                   <button type="button" className="action-button action-button-secondary" onClick={handleReset}>
                     重設成本地預設
                   </button>
-                  <button type="button" className="action-button action-button-primary" onClick={() => void handleSaveRemote()}>
+                  <button type="button" className="action-button action-button-primary" onClick={() => void handleSaveRemote()} disabled={!currentCardRecord.isLive}>
                     儲存正式名片
                   </button>
                 </div>

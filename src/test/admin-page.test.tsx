@@ -26,6 +26,7 @@ const createJsonResponse = (payload: unknown, init?: ResponseInit) =>
 const buildFetchMock = (remoteConfig?: typeof defaultCard) =>
   vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    const resolvedRemoteConfig = remoteConfig ?? defaultCard;
 
     if (init?.method === 'POST') {
       const payload = JSON.parse(String(init.body || '{}')) as { action?: string; config?: unknown };
@@ -67,13 +68,49 @@ const buildFetchMock = (remoteConfig?: typeof defaultCard) =>
           config: payload.config,
         });
       }
+
+      if (payload.action === 'publishSnapshot') {
+        const snapshotConfig = cloneCardConfig((payload.config as typeof defaultCard) ?? resolvedRemoteConfig);
+        snapshotConfig.slug = 'default-v-20260322t100000z';
+        snapshotConfig.version = {
+          kind: 'snapshot',
+          versionId: '20260322T100000Z',
+          publishedAt: '2026-03-22T10:00:00.000Z',
+          liveSlug: 'default',
+          sourceSlug: 'default',
+        };
+
+        return createJsonResponse({
+          ok: true,
+          slug: snapshotConfig.slug,
+          updatedAt: '2026-03-22T10:00:00.000Z',
+          updatedBy: 'admin@test',
+          versionId: '20260322T100000Z',
+          publishedAt: '2026-03-22T10:00:00.000Z',
+          config: snapshotConfig,
+        });
+      }
+    }
+
+    if (url.includes('action=listCards')) {
+      return createJsonResponse({
+        ok: true,
+        cards: [
+          {
+            slug: 'default',
+            isLive: true,
+            updatedAt: '2026-03-22T10:00:00.000Z',
+            updatedBy: 'admin@test',
+          },
+        ],
+      });
     }
 
     if (url.includes('action=getCard')) {
       return createJsonResponse({
         ok: true,
         slug: 'default',
-        config: remoteConfig ?? defaultCard,
+        config: resolvedRemoteConfig,
       });
     }
 
@@ -268,7 +305,7 @@ describe('AdminPage', () => {
     await user.click(screen.getByRole('button', { name: '重新載入正式資料' }));
 
     expect(screen.getByText('尚未儲存變更。重新整理或離開頁面前會提醒。')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('clears the current admin session from sessionStorage', async () => {
@@ -433,9 +470,34 @@ describe('AdminPage', () => {
     await waitFor(() => {
       expect(screen.getByText('樣式設定')).toBeInTheDocument();
       expect(screen.getByLabelText('品牌 / 小標字色')).toBeInTheDocument();
+      expect(screen.getByLabelText('品牌 / 小標字重')).toBeInTheDocument();
       expect(screen.getAllByText('Flex＋網頁').length).toBeGreaterThan(0);
       expect(screen.getAllByText('僅 Flex').length).toBeGreaterThan(0);
       expect(screen.getAllByText('僅網頁').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('publishes a new snapshot permalink from live/default', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '發佈為新版本' }));
+
+    await waitFor(() => {
+      const publishCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"publishSnapshot"'));
+      expect(String(publishCall?.[1]?.body || '')).toContain('"slug":"default"');
+      expect(screen.getByText('目前 live/default 已同步儲存，並成功發佈一份不可變更的 snapshot。')).toBeInTheDocument();
+      expect(screen.getByText('最近發佈 snapshot：default-v-20260322t100000z')).toBeInTheDocument();
     });
   });
 

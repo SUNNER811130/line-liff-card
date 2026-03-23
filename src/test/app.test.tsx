@@ -180,14 +180,16 @@ describe('App', () => {
     });
   });
 
-  it('shows fallback when slug does not exist', () => {
+  it('shows fallback when slug does not exist', async () => {
     window.history.replaceState({}, '', '/card/missing-card/');
 
     render(<App />);
 
-    expect(screen.getByText('找不到這張電子名片')).toBeInTheDocument();
-    expect(screen.getByText(/missing-card/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回首頁' })).toHaveAttribute('href', '/');
+    await waitFor(() => {
+      expect(screen.getByText('找不到這張電子名片')).toBeInTheDocument();
+      expect(screen.getByText(/missing-card/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '返回首頁' })).toHaveAttribute('href', '/');
+    });
   });
 
   it('shows login hint when user is not logged in inside LIFF', async () => {

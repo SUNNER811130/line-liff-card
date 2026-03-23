@@ -82,6 +82,32 @@ export const assertCardConfig: (value: unknown) => asserts value is CardConfig =
   if (!isNonEmptyString(value.seo.ogTitle)) throw new Error('card.seo.ogTitle 必須存在。');
   if (!isNonEmptyString(value.seo.ogDescription)) throw new Error('card.seo.ogDescription 必須存在。');
   if (!isNonEmptyString(value.seo.ogImage)) throw new Error('card.seo.ogImage 必須存在。');
+
+  if (value.version !== undefined) {
+    if (!isRecord(value.version)) {
+      throw new Error('card.version 必須是物件。');
+    }
+
+    if (value.version.kind !== 'live' && value.version.kind !== 'snapshot') {
+      throw new Error('card.version.kind 必須是 live 或 snapshot。');
+    }
+
+    if (value.version.versionId !== undefined && !isNonEmptyString(value.version.versionId)) {
+      throw new Error('card.version.versionId 必須是非空字串。');
+    }
+
+    if (value.version.publishedAt !== undefined && !isNonEmptyString(value.version.publishedAt)) {
+      throw new Error('card.version.publishedAt 必須是非空字串。');
+    }
+
+    if (value.version.liveSlug !== undefined && !isNonEmptyString(value.version.liveSlug)) {
+      throw new Error('card.version.liveSlug 必須是非空字串。');
+    }
+
+    if (value.version.sourceSlug !== undefined && !isNonEmptyString(value.version.sourceSlug)) {
+      throw new Error('card.version.sourceSlug 必須是非空字串。');
+    }
+  }
 };
 
 export const defineCardConfig = (value: CardConfig): CardConfig => {

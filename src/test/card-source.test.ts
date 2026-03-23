@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloneCardConfig } from '../content/cards/draft';
 import { defaultCard } from '../content/cards/default';
-import { fetchRemoteCardConfig, loadRuntimeCard, uploadRuntimeImage } from '../lib/card-source';
+import { fetchRemoteCardConfig, listRemoteCards, loadRuntimeCard, publishSnapshotCard, uploadRuntimeImage } from '../lib/card-source';
 
 const createJsonResponse = (payload: unknown, init?: ResponseInit) =>
   new Response(JSON.stringify(payload), {
@@ -108,6 +108,63 @@ describe('card source adapter', () => {
       updatedAt: '2026-03-22T11:00:00.000Z',
       updatedBy: 'admin',
       mimeType: undefined,
+    });
+  });
+
+  it('lists live and snapshot records from the backend', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
+        ok: true,
+        cards: [
+          { slug: 'default', isLive: true, updatedAt: '2026-03-22T10:00:00.000Z', updatedBy: 'admin' },
+          { slug: 'default-v-20260322t100000z', isLive: false, versionId: '20260322T100000Z', publishedAt: '2026-03-22T10:00:00.000Z' },
+        ],
+      }),
+    );
+
+    await expect(
+      listRemoteCards({
+        baseUrl: 'https://example.test/card-api',
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toEqual([
+      { slug: 'default', isLive: true, updatedAt: '2026-03-22T10:00:00.000Z', updatedBy: 'admin', versionId: undefined, publishedAt: undefined },
+      { slug: 'default-v-20260322t100000z', isLive: false, versionId: '20260322T100000Z', publishedAt: '2026-03-22T10:00:00.000Z', updatedAt: undefined, updatedBy: undefined },
+    ]);
+  });
+
+  it('publishes a snapshot while preserving the current live slug contract', async () => {
+    const snapshotConfig = cloneCardConfig(defaultCard);
+    snapshotConfig.slug = 'default-v-20260322t100000z';
+    snapshotConfig.version = {
+      kind: 'snapshot',
+      versionId: '20260322T100000Z',
+      publishedAt: '2026-03-22T10:00:00.000Z',
+      liveSlug: 'default',
+      sourceSlug: 'default',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
+        ok: true,
+        slug: snapshotConfig.slug,
+        updatedAt: '2026-03-22T10:00:00.000Z',
+        updatedBy: 'admin',
+        versionId: '20260322T100000Z',
+        publishedAt: '2026-03-22T10:00:00.000Z',
+        config: snapshotConfig,
+      }),
+    );
+
+    await expect(
+      publishSnapshotCard('default', defaultCard, {
+        baseUrl: 'https://example.test/card-api',
+        adminSession: 'session-123',
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toMatchObject({
+      slug: 'default-v-20260322t100000z',
+      versionId: '20260322T100000Z',
+      publishedAt: '2026-03-22T10:00:00.000Z',
     });
   });
 });

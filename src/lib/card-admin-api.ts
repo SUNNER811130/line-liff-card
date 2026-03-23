@@ -7,12 +7,23 @@ import type { CardConfig } from '../content/cards/types';
 type CardApiDataEnvelope = {
   config?: unknown;
   card?: unknown;
+  cards?: unknown;
+};
+
+export type CardRecordSummary = {
+  slug: string;
+  isLive: boolean;
+  versionId?: string;
+  publishedAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 };
 
 export type CardApiSuccessEnvelope = {
   ok: true;
   action?: string;
   slug?: string;
+  cards?: unknown;
   updatedAt?: string;
   updatedBy?: string;
   valid?: boolean;
@@ -28,6 +39,8 @@ export type CardApiSuccessEnvelope = {
   card?: unknown;
   data?: CardApiDataEnvelope;
   status?: Record<string, unknown>;
+  versionId?: string;
+  publishedAt?: string;
 };
 
 export type CardApiErrorEnvelope = {
@@ -41,6 +54,14 @@ export type CardApiEnvelope = CardApiSuccessEnvelope | CardApiErrorEnvelope;
 
 export type SaveCardRequest = {
   action: 'saveCard';
+  slug: string;
+  config: CardConfig;
+  adminSession: string;
+  updatedBy?: string;
+};
+
+export type PublishSnapshotRequest = {
+  action: 'publishSnapshot';
   slug: string;
   config: CardConfig;
   adminSession: string;
@@ -66,6 +87,13 @@ export type UploadImageRequest = {
   mimeType: string;
   base64Data: string;
 };
+
+export const extractCardsFromEnvelope = (payload: CardApiEnvelope): unknown =>
+  'cards' in payload && payload.cards !== undefined
+    ? payload.cards
+    : 'data' in payload
+      ? payload.data?.cards
+      : undefined;
 
 export const createCardApiPostInit = (payload: Record<string, unknown>): RequestInit => ({
   method: 'POST',

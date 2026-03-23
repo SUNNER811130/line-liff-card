@@ -32,20 +32,26 @@ export type CardAppearanceConfig = {
 export type CardStylesConfig = {
   brandTextColor?: string;
   brandFontSize?: string;
+  brandFontWeight?: string;
   nameTextColor?: string;
   nameFontSize?: string;
+  nameFontWeight?: string;
   titleTextColor?: string;
   titleFontSize?: string;
+  titleFontWeight?: string;
   subtitleTextColor?: string;
   subtitleFontSize?: string;
+  subtitleFontWeight?: string;
   introTextColor?: string;
   introFontSize?: string;
+  introFontWeight?: string;
   headlineFontSize?: string;
   subheadlineFontSize?: string;
   primaryButtonBackgroundColor?: string;
   primaryButtonTextColor?: string;
   secondaryButtonBackgroundColor?: string;
   secondaryButtonTextColor?: string;
+  buttonFontWeight?: string;
   buttonBorderRadius?: string;
   sectionGap?: string;
   cardPadding?: string;
@@ -100,6 +106,17 @@ export type CardConfig = {
   actions: CardActionConfig[];
   share: CardShareConfig;
   seo: CardSeoConfig;
+  version?: CardVersionMeta;
+};
+
+export type CardVersionKind = 'live' | 'snapshot';
+
+export type CardVersionMeta = {
+  kind: CardVersionKind;
+  versionId?: string;
+  publishedAt?: string;
+  liveSlug?: string;
+  sourceSlug?: string;
 };
 
 export type ThemePreset = {

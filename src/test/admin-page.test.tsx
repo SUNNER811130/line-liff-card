@@ -129,6 +129,8 @@ describe('AdminPage', () => {
 
     await user.clear(screen.getByLabelText('姓名'));
     await user.type(screen.getByLabelText('姓名'), '新的正式姓名');
+    await user.clear(screen.getByLabelText('姓名字級'));
+    await user.type(screen.getByLabelText('姓名字級'), '36');
     expect(screen.getByText('尚未儲存變更。重新整理或離開頁面前會提醒。')).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Updated By'), 'admin@test');
@@ -145,6 +147,8 @@ describe('AdminPage', () => {
           body: expect.stringContaining('"adminSession":"session-123"'),
         }),
       );
+      const saveCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"saveCard"'));
+      expect(String(saveCall?.[1]?.body || '')).toContain('"nameFontSize":"36"');
       expect(screen.getByText('目前沒有未儲存變更。')).toBeInTheDocument();
       expect(screen.getByText(/正式名片已儲存。更新時間：2026-03-22T10:00:00.000Z｜更新者：admin@test/)).toBeInTheDocument();
     });
@@ -318,6 +322,7 @@ describe('AdminPage', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000')).toBeInTheDocument();
       expect(screen.getByText(/圖片已上傳到 Google Drive，並同步寫入正式 photo\.src/)).toBeInTheDocument();
+      expect(screen.getByText(/建議尺寸：1200 × 900，建議比例：4:3/)).toBeInTheDocument();
       expect(screen.getAllByText(/最近成功儲存：2026-03-22T11:00:00.000Z/).length).toBeGreaterThan(0);
     });
   });
@@ -349,6 +354,25 @@ describe('AdminPage', () => {
       expect(screen.getByDisplayValue('https://drive.google.com/thumbnail?id=drive-file-123&sz=w2000')).toBeInTheDocument();
       expect(screen.getByDisplayValue('尚未儲存的新姓名')).toBeInTheDocument();
       expect(screen.getByText('尚未儲存變更。重新整理或離開頁面前會提醒。')).toBeInTheDocument();
+    });
+  });
+
+  it('shows the style settings section with scope badges and editable style fields', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('樣式設定')).toBeInTheDocument();
+      expect(screen.getByLabelText('品牌 / 小標字色')).toBeInTheDocument();
+      expect(screen.getAllByText('Flex＋網頁').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('僅 Flex').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('僅網頁').length).toBeGreaterThan(0);
     });
   });
 });

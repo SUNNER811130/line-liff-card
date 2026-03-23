@@ -43,13 +43,20 @@ import { prepareImageUpload } from '../lib/image-upload';
 import { applyBasicSeo } from '../lib/seo';
 import { isAllowedLink, isHttpUrl, validateCardConfig } from '../lib/card-validation';
 import {
-  ADMIN_FIELD_GROUPS,
   ADMIN_FIELD_GROUPS_BY_KEY,
   CARD_RUNTIME_FIELDS_BY_GROUP,
   type AdminFieldGroupKey,
   type AdminFieldRegistryItem,
   type FieldVisibilityScope,
 } from '../lib/card-field-registry';
+import {
+  FLEX_HERO_IMAGE_ASPECT_RATIO,
+  FLEX_HERO_IMAGE_MIN_HEIGHT,
+  FLEX_HERO_IMAGE_MIN_WIDTH,
+  FLEX_HERO_IMAGE_RECOMMENDED_HEIGHT,
+  FLEX_HERO_IMAGE_RECOMMENDED_WIDTH,
+  getCardStyleInputValue,
+} from '../lib/card-style-registry';
 
 type FieldProps = {
   label: string;
@@ -67,9 +74,9 @@ type FieldProps = {
 };
 
 const visibilityScopeLabel: Record<FieldVisibilityScope, string> = {
-  both: 'Flex / 網頁',
-  web: '網頁',
-  flex: 'Flex',
+  both: 'Flex＋網頁',
+  web: '僅網頁',
+  flex: '僅 Flex',
   system: '系統',
 };
 
@@ -354,6 +361,16 @@ export function AdminPage() {
     setDraft((current) => coerceDraft(updater(current)));
   };
 
+  const updateStyle = (styleKey: keyof NonNullable<CardConfig['styles']>, value: string) => {
+    patchDraft((current) => ({
+      ...current,
+      styles: {
+        ...current.styles,
+        [styleKey]: value,
+      },
+    }));
+  };
+
   const updateAction = (index: number, updater: (action: CardActionConfig) => CardActionConfig) => {
     patchDraft((current) => {
       const actions = [...current.actions];
@@ -608,6 +625,52 @@ export function AdminPage() {
         return renderTextField(field, draft.share.text ?? '', (value) =>
           patchDraft((current) => ({ ...current, share: { ...current.share, text: value } })),
         );
+      case 'styles.brandTextColor':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'brandTextColor'), (value) => updateStyle('brandTextColor', value));
+      case 'styles.brandFontSize':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'brandFontSize'), (value) => updateStyle('brandFontSize', value));
+      case 'styles.nameTextColor':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'nameTextColor'), (value) => updateStyle('nameTextColor', value));
+      case 'styles.nameFontSize':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'nameFontSize'), (value) => updateStyle('nameFontSize', value));
+      case 'styles.titleTextColor':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'titleTextColor'), (value) => updateStyle('titleTextColor', value));
+      case 'styles.titleFontSize':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'titleFontSize'), (value) => updateStyle('titleFontSize', value));
+      case 'styles.introTextColor':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'introTextColor'), (value) => updateStyle('introTextColor', value));
+      case 'styles.introFontSize':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'introFontSize'), (value) => updateStyle('introFontSize', value));
+      case 'styles.headlineFontSize':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'headlineFontSize'), (value) => updateStyle('headlineFontSize', value));
+      case 'styles.subheadlineFontSize':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'subheadlineFontSize'), (value) => updateStyle('subheadlineFontSize', value));
+      case 'styles.primaryButtonBackgroundColor':
+        return renderTextField(
+          field,
+          getCardStyleInputValue(draft.styles, 'primaryButtonBackgroundColor'),
+          (value) => updateStyle('primaryButtonBackgroundColor', value),
+        );
+      case 'styles.primaryButtonTextColor':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'primaryButtonTextColor'), (value) => updateStyle('primaryButtonTextColor', value));
+      case 'styles.secondaryButtonBackgroundColor':
+        return renderTextField(
+          field,
+          getCardStyleInputValue(draft.styles, 'secondaryButtonBackgroundColor'),
+          (value) => updateStyle('secondaryButtonBackgroundColor', value),
+        );
+      case 'styles.secondaryButtonTextColor':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'secondaryButtonTextColor'), (value) => updateStyle('secondaryButtonTextColor', value));
+      case 'styles.buttonBorderRadius':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'buttonBorderRadius'), (value) => updateStyle('buttonBorderRadius', value));
+      case 'styles.sectionGap':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'sectionGap'), (value) => updateStyle('sectionGap', value));
+      case 'styles.cardPadding':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'cardPadding'), (value) => updateStyle('cardPadding', value));
+      case 'styles.flexTitleSubtitleGap':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'flexTitleSubtitleGap'), (value) => updateStyle('flexTitleSubtitleGap', value));
+      case 'styles.flexBodyLineHeight':
+        return renderTextField(field, getCardStyleInputValue(draft.styles, 'flexBodyLineHeight'), (value) => updateStyle('flexBodyLineHeight', value));
       case 'seo.title':
         return renderTextField(field, draft.seo.title, (value) =>
           patchDraft((current) => ({ ...current, seo: { ...current.seo, title: value } })),
@@ -666,7 +729,7 @@ export function AdminPage() {
     }
   };
 
-  const renderFieldGroup = (groupKey: AdminFieldGroupKey) => {
+  const renderFieldGroup = (groupKey: AdminFieldGroupKey, options: { title?: string; description?: string; extra?: ReactNode } = {}) => {
     const fields = CARD_RUNTIME_FIELDS_BY_GROUP[groupKey];
     const group = ADMIN_FIELD_GROUPS_BY_KEY[groupKey];
     if (!fields.length) {
@@ -677,14 +740,25 @@ export function AdminPage() {
       <section key={group.key} className="admin-panel">
         <div className="admin-section-heading">
           <p className="section-label">欄位分組</p>
-          <h2 className="admin-panel-title">{group.label}</h2>
-          <p className="support-copy">{group.description}</p>
+          <h2 className="admin-panel-title">{options.title ?? group.label}</h2>
+          <p className="support-copy">{options.description ?? group.description}</p>
         </div>
         <div className="admin-field-grid">{fields.map((field) => renderField(field))}</div>
+        {options.extra}
         {groupKey === 'assets' ? (
           <>
             <input ref={photoUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('photo', event)} />
             <input ref={ogUploadInputRef} type="file" accept="image/*" className="admin-hidden-input" onChange={(event) => void handleAssetUpload('ogImage', event)} />
+            <div className="admin-info-card admin-image-guideline-card">
+              <p className="section-label">圖片規格提示</p>
+              <p className="support-copy">
+                建議尺寸：{FLEX_HERO_IMAGE_RECOMMENDED_WIDTH} × {FLEX_HERO_IMAGE_RECOMMENDED_HEIGHT}，建議比例：{FLEX_HERO_IMAGE_ASPECT_RATIO}。
+              </p>
+              <p className="support-copy">
+                最低建議：{FLEX_HERO_IMAGE_MIN_WIDTH} × {FLEX_HERO_IMAGE_MIN_HEIGHT}。主體請置中並保留四周安全留白。
+              </p>
+              <p className="support-copy">此圖會同時用於 `/card/default/` 與 LINE Flex hero，Flex 端會以 cover 方式裁切。</p>
+            </div>
             <div className="admin-image-preview-grid">
               <div className="admin-image-preview-card">
                 <p className="section-label">主視覺預覽</p>
@@ -698,6 +772,25 @@ export function AdminPage() {
             <StatusBanner status={assetUploadStatus} />
           </>
         ) : null}
+      </section>
+    );
+  };
+
+  const renderSection = (title: string, description: string, groupKeys: AdminFieldGroupKey[], extra?: ReactNode) => {
+    const fields = groupKeys.flatMap((groupKey) => CARD_RUNTIME_FIELDS_BY_GROUP[groupKey]);
+    if (!fields.length) {
+      return null;
+    }
+
+    return (
+      <section className="admin-panel">
+        <div className="admin-section-heading">
+          <p className="section-label">後台分區</p>
+          <h2 className="admin-panel-title">{title}</h2>
+          <p className="support-copy">{description}</p>
+        </div>
+        <div className="admin-field-grid">{fields.map((field) => renderField(field))}</div>
+        {extra}
       </section>
     );
   };
@@ -1110,14 +1203,36 @@ export function AdminPage() {
 
           <section className="admin-layout">
             <div className="admin-form-column">
-              {ADMIN_FIELD_GROUPS.filter((group) => group.key !== 'system').map((group) => renderFieldGroup(group.key))}
+              {renderSection(
+                '內容設定',
+                '集中管理卡片內容、網頁區塊、CTA 與分享 fallback 文案。',
+                ['identity', 'webContent', 'actions', 'share'],
+              )}
+
+              {renderFieldGroup('assets', {
+                title: '圖片設定',
+                description: '管理主視覺與分享圖來源，維持既有 Google Drive 上傳流程與正式欄位 contract。',
+              })}
+
+              {renderSection(
+                '樣式設定',
+                '只先暴露最常改的字級、字色、按鈕與間距；未填時會 fallback 到目前正式版外觀。',
+                ['styles'],
+                <div className="admin-info-card">
+                  <p className="section-label">作用範圍提示</p>
+                  <p className="support-copy">每個欄位都會標示 `Flex＋網頁`、`僅網頁`、`僅 Flex` 或 `系統`，避免修改範圍不清楚。</p>
+                  <p className="support-copy">Admin preview 會即時反映網頁端樣式；Flex 專用欄位則會在分享卡片輸出時套用。</p>
+                </div>,
+              )}
 
               <section className="admin-panel">
                 <details className="admin-system-details" open={ADMIN_FIELD_GROUPS_BY_KEY.system.defaultOpen}>
-                  <summary className="admin-details-summary">系統欄位與保留設定</summary>
+                  <summary className="admin-details-summary">系統欄位</summary>
                   <div className="admin-details-body">
-                    <p className="support-copy">{ADMIN_FIELD_GROUPS_BY_KEY.system.description}</p>
-                    <div className="admin-field-grid">{CARD_RUNTIME_FIELDS_BY_GROUP.system.map((field) => renderField(field))}</div>
+                    <p className="support-copy">包含 SEO / metadata、slug、layout、內部 key 與其他不直接顯示的系統設定。</p>
+                    <div className="admin-field-grid">
+                      {[...CARD_RUNTIME_FIELDS_BY_GROUP.seo, ...CARD_RUNTIME_FIELDS_BY_GROUP.system].map((field) => renderField(field))}
+                    </div>
                   </div>
                 </details>
               </section>

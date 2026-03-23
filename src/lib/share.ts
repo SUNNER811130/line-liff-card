@@ -2,6 +2,12 @@ import type { CardConfig } from '../content/cards/types';
 import { createPermanentLink, shareCard } from './liff';
 import { navigateToUrl, resolveActionUrl, toAssetUrl } from './runtime';
 import { getCardLiffUrl } from './routes';
+import {
+  buildFlexStyleTokens,
+  FLEX_HERO_IMAGE_ASPECT_MODE,
+  FLEX_HERO_IMAGE_ASPECT_RATIO,
+  FLEX_HERO_IMAGE_SIZE,
+} from './card-style-registry';
 
 type ShareOutcome = 'shared' | 'dismissed' | 'web-share' | 'redirected' | 'copied';
 
@@ -51,97 +57,110 @@ const buildShareIntentUrl = (slug: string, source: string, intentId?: string): s
 export const buildFlexForwardShareUrl = (slug: string): string =>
   buildShareIntentUrl(slug, SHARE_SOURCE_FLEX_FORWARD);
 
-const buildFlexFooterButtons = (config: CardConfig, pageUrl: string) => [
-  {
-    type: 'button' as const,
-    style: 'primary' as const,
-    color: '#163863',
-    action: {
-      type: 'uri' as const,
-      label: config.actions[0]?.label ?? '查看名片',
-      uri: resolveActionUrl(config.actions[0]?.url ?? '', pageUrl),
-    },
-  },
-  {
-    type: 'button' as const,
-    style: 'secondary' as const,
-    action: {
-      type: 'uri' as const,
-      label: config.actions[1]?.label ?? '立即聯絡',
-      uri: resolveActionUrl(config.actions[1]?.url ?? '', pageUrl),
-    },
-  },
-  {
-    type: 'button' as const,
-    style: 'link' as const,
-    height: 'sm' as const,
-    action: {
-      type: 'uri' as const,
-      label: FLEX_FORWARD_SHARE_LABEL,
-      uri: buildFlexForwardShareUrl(config.slug),
-    },
-  },
-];
+const buildFlexFooterButtons = (config: CardConfig, pageUrl: string) => {
+  const styleTokens = buildFlexStyleTokens(config);
 
-export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string) => ({
-  type: 'flex' as const,
-  altText: `${config.content.fullName}｜${config.content.brandName}`,
-  contents: {
-    type: 'bubble' as const,
-    hero: {
-      type: 'image' as const,
-      url: toAssetUrl(config.photo.src),
-      size: 'full' as const,
-      aspectRatio: '4:3' as const,
-      aspectMode: 'cover' as const,
+  return [
+    {
+      type: 'button' as const,
+      style: 'primary' as const,
+      color: styleTokens.primaryButtonBackgroundColor,
       action: {
         type: 'uri' as const,
-        label: config.content.fullName,
-        uri: shareUrl,
+        label: config.actions[0]?.label ?? '查看名片',
+        uri: resolveActionUrl(config.actions[0]?.url ?? '', pageUrl),
       },
     },
-    body: {
-      type: 'box' as const,
-      layout: 'vertical' as const,
-      spacing: 'md' as const,
-      contents: [
-        {
-          type: 'text' as const,
-          text: config.content.brandName,
-          size: 'xs' as const,
-          weight: 'bold' as const,
-          color: '#37506b',
-        },
-        {
-          type: 'text' as const,
-          text: config.content.fullName,
-          size: 'xl' as const,
-          weight: 'bold' as const,
-          color: '#132033',
-        },
-        {
-          type: 'text' as const,
-          text: config.content.title,
-          size: 'sm' as const,
-          color: '#5e6c81',
-        },
-        {
-          type: 'text' as const,
-          text: config.content.intro,
-          wrap: true,
-          size: 'sm' as const,
-          color: '#5e6c81',
-        },
-      ],
+    {
+      type: 'button' as const,
+      style: 'secondary' as const,
+      action: {
+        type: 'uri' as const,
+        label: config.actions[1]?.label ?? '立即聯絡',
+        uri: resolveActionUrl(config.actions[1]?.url ?? '', pageUrl),
+      },
     },
-    footer: {
-      type: 'box' as const,
-      layout: 'vertical' as const,
-      spacing: 'sm' as const,
-      contents: buildFlexFooterButtons(config, pageUrl),
+    {
+      type: 'button' as const,
+      style: 'link' as const,
+      height: 'sm' as const,
+      action: {
+        type: 'uri' as const,
+        label: FLEX_FORWARD_SHARE_LABEL,
+        uri: buildFlexForwardShareUrl(config.slug),
+      },
     },
-  },
-});
+  ];
+};
+
+export const buildFlexMessage = (config: CardConfig, shareUrl: string, pageUrl: string) => {
+  const styleTokens = buildFlexStyleTokens(config);
+
+  return {
+    type: 'flex' as const,
+    altText: `${config.content.fullName}｜${config.content.brandName}`,
+    contents: {
+      type: 'bubble' as const,
+      hero: {
+        type: 'image' as const,
+        url: toAssetUrl(config.photo.src),
+        size: FLEX_HERO_IMAGE_SIZE as 'full',
+        aspectRatio: FLEX_HERO_IMAGE_ASPECT_RATIO as '4:3',
+        aspectMode: FLEX_HERO_IMAGE_ASPECT_MODE as 'cover',
+        action: {
+          type: 'uri' as const,
+          label: config.content.fullName,
+          uri: shareUrl,
+        },
+      },
+      body: {
+        type: 'box' as const,
+        layout: 'vertical' as const,
+        paddingAll: styleTokens.sectionGap,
+        contents: [
+          {
+            type: 'text' as const,
+            text: config.content.brandName,
+            size: styleTokens.brandFontSize,
+            weight: 'bold' as const,
+            color: styleTokens.brandTextColor,
+          },
+          {
+            type: 'text' as const,
+            text: config.content.fullName,
+            margin: styleTokens.titleSubtitleGap,
+            size: styleTokens.nameFontSize,
+            weight: 'bold' as const,
+            color: styleTokens.nameTextColor,
+          },
+          {
+            type: 'text' as const,
+            text: config.content.title,
+            margin: styleTokens.titleSubtitleGap,
+            size: styleTokens.titleFontSize,
+            color: styleTokens.titleTextColor,
+          },
+          {
+            type: 'text' as const,
+            text: config.content.intro,
+            wrap: true,
+            margin: styleTokens.sectionGap,
+            size: styleTokens.introFontSize,
+            color: styleTokens.introTextColor,
+            lineSpacing: styleTokens.bodyLineHeight,
+          },
+        ],
+      },
+      footer: {
+        type: 'box' as const,
+        layout: 'vertical' as const,
+        spacing: 'sm' as const,
+        paddingAll: styleTokens.sectionGap,
+        contents: buildFlexFooterButtons(config, pageUrl),
+      },
+    },
+  };
+};
 
 const buildLineShareUrl = (config: CardConfig, pageUrl: string) =>
   `https://line.me/R/msg/text/?${encodeURIComponent(`${config.content.fullName}｜${config.content.title}\n${config.content.brandName}\n${pageUrl}`)}`;

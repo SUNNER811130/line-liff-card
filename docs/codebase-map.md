@@ -22,6 +22,8 @@
   canonical slug、前台/admin path、LIFF/web share URL。
 - `src/lib/card-field-registry.ts`
   admin 欄位 registry。定義每個 runtime key 在 admin 的分組、標籤、說明、可編輯性。
+- `src/lib/card-style-registry.ts`
+  集中管理 Flex 與 `/card/default/` 共用的 style key、預設值、作用範圍與 fallback token。
 - `src/lib/card-validation.ts`
   admin save 前驗證規則。
 - `src/content/cards/*`

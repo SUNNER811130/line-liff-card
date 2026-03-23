@@ -21,6 +21,11 @@ describe('share helpers', () => {
     const buttons = message.contents.footer.contents;
 
     expect(buttons).toHaveLength(3);
+    expect(message.contents.hero).toMatchObject({
+      size: 'full',
+      aspectRatio: '4:3',
+      aspectMode: 'cover',
+    });
     expect(buttons[2]).toMatchObject({
       type: 'button',
       style: 'link',
@@ -94,6 +99,38 @@ describe('share helpers', () => {
       action: {
         label: 'Runtime 第一按鈕',
       },
+    });
+  });
+
+  it('keeps the flex output valid when new style keys are blank', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    const runtimeConfig = cloneCardConfig(defaultCard);
+    runtimeConfig.styles = {
+      brandTextColor: '',
+      nameFontSize: '',
+      sectionGap: '',
+      flexBodyLineHeight: '',
+    };
+    const { buildFlexMessage } = await import('../lib/share');
+
+    const message = buildFlexMessage(
+      runtimeConfig,
+      'https://liff.line.me/mock-permalink',
+      'https://example.test/card/default/',
+    );
+
+    expect(message.contents.body).toMatchObject({
+      type: 'box',
+      layout: 'vertical',
+      paddingAll: '16px',
+    });
+    expect(message.contents.body.contents[0]).toMatchObject({
+      type: 'text',
+      size: '12px',
+    });
+    expect(message.contents.body.contents[3]).toMatchObject({
+      type: 'text',
+      lineSpacing: '4px',
     });
   });
 });

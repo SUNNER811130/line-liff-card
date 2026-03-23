@@ -1,6 +1,7 @@
 import { assertCardConfig } from '../content/cards/schema';
-import type { CardActionConfig, CardConfig } from '../content/cards/types';
+import type { CardActionConfig, CardConfig, CardStylesConfig } from '../content/cards/types';
 import { isAllowedLink, isHttpUrl, isRelativeAssetPath } from '../lib/card-validation';
+import { CARD_STYLE_REGISTRY } from '../lib/card-style-registry';
 
 /**
  * Pure helpers for AdminPage state shaping. Keep runtime keys, save payload
@@ -56,8 +57,14 @@ export const normalizeAction = (action: CardActionConfig, fallbackId: string): C
   enabled: action.enabled ?? true,
 });
 
+const normalizeStyles = (styles: CardStylesConfig | undefined): CardStylesConfig =>
+  Object.fromEntries(
+    CARD_STYLE_REGISTRY.map((field) => [field.key, styles?.[field.key] ?? '']),
+  ) as CardStylesConfig;
+
 export const coerceDraft = (draft: CardConfig): CardConfig => ({
   ...draft,
+  styles: normalizeStyles(draft.styles),
   actions: draft.actions.slice(0, 2).map((action, index) =>
     normalizeAction(action, index === 0 ? 'contact' : 'services'),
   ),

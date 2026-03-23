@@ -34,6 +34,27 @@
     "actionsDescription": "前兩顆按鈕可持續更新，第三顆分享按鈕由系統固定保留。",
     "sharePanelTitle": "分享說明"
   },
+  "styles": {
+    "brandTextColor": "#66758b",
+    "brandFontSize": "12",
+    "nameTextColor": "#172233",
+    "nameFontSize": "44",
+    "titleTextColor": "#5d6a7d",
+    "titleFontSize": "16",
+    "introTextColor": "#5d6a7d",
+    "introFontSize": "16",
+    "headlineFontSize": "28",
+    "subheadlineFontSize": "16",
+    "primaryButtonBackgroundColor": "#163863",
+    "primaryButtonTextColor": "#ffffff",
+    "secondaryButtonBackgroundColor": "#edf3fb",
+    "secondaryButtonTextColor": "#18365f",
+    "buttonBorderRadius": "18",
+    "sectionGap": "16",
+    "cardPadding": "24",
+    "flexTitleSubtitleGap": "6",
+    "flexBodyLineHeight": "4"
+  },
   "actions": [
     {
       "id": "contact",

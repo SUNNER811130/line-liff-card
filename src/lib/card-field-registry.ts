@@ -1,3 +1,5 @@
+import { CARD_STYLE_REGISTRY } from './card-style-registry';
+
 export type FieldVisibilityScope = 'both' | 'web' | 'flex' | 'system';
 
 export type AdminFieldGroupKey =
@@ -7,6 +9,7 @@ export type AdminFieldGroupKey =
   | 'actions'
   | 'share'
   | 'seo'
+  | 'styles'
   | 'system';
 
 export type AdminFieldKind = 'text' | 'textarea' | 'list' | 'boolean' | 'readonly';
@@ -67,6 +70,12 @@ export const ADMIN_FIELD_GROUPS: AdminFieldGroupDefinition[] = [
     key: 'seo',
     label: 'SEO / Metadata',
     description: '瀏覽器標題、社群預覽與非畫面直接顯示的 metadata。',
+    defaultOpen: true,
+  },
+  {
+    key: 'styles',
+    label: '樣式設定',
+    description: '集中管理網頁與 LINE Flex 共用或各自獨立的核心樣式 token。',
     defaultOpen: true,
   },
   {
@@ -490,6 +499,20 @@ const cardRuntimeFieldRegistrySource = [
     sortOrder: 680,
     kind: 'readonly',
   },
+  ...CARD_STYLE_REGISTRY.map(
+    (styleField, index) =>
+      ({
+        key: `styles.${styleField.key}`,
+        label: styleField.label,
+        group: 'styles',
+        visibilityScope: styleField.scope,
+        helpText: styleField.helpText,
+        isEditable: true,
+        sortOrder: 710 + index * 10,
+        placeholder: styleField.placeholder,
+        full: false,
+      }) satisfies AdminFieldRegistryItem,
+  ),
 ] satisfies AdminFieldRegistryItem[];
 
 export const CARD_RUNTIME_FIELD_REGISTRY: AdminFieldRegistryItem[] = [...cardRuntimeFieldRegistrySource].sort(

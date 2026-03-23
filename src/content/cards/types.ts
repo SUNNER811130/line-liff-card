@@ -29,6 +29,28 @@ export type CardAppearanceConfig = {
   layout: CardLayoutId;
 };
 
+export type CardStylesConfig = {
+  brandTextColor?: string;
+  brandFontSize?: string;
+  nameTextColor?: string;
+  nameFontSize?: string;
+  titleTextColor?: string;
+  titleFontSize?: string;
+  introTextColor?: string;
+  introFontSize?: string;
+  headlineFontSize?: string;
+  subheadlineFontSize?: string;
+  primaryButtonBackgroundColor?: string;
+  primaryButtonTextColor?: string;
+  secondaryButtonBackgroundColor?: string;
+  secondaryButtonTextColor?: string;
+  buttonBorderRadius?: string;
+  sectionGap?: string;
+  cardPadding?: string;
+  flexTitleSubtitleGap?: string;
+  flexBodyLineHeight?: string;
+};
+
 export type CardShareConfig = {
   title?: string;
   text?: string;
@@ -66,6 +88,7 @@ export type CardConfig = {
   modules: CardModulesConfig;
   photo: CardPhotoConfig;
   content: CardContentConfig;
+  styles?: CardStylesConfig;
   actions: CardActionConfig[];
   share: CardShareConfig;
   seo: CardSeoConfig;

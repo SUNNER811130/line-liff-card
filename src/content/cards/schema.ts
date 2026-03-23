@@ -7,6 +7,8 @@ const isNonEmptyString = (value: unknown): value is string => typeof value === '
 
 const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean';
 
+const isString = (value: unknown): value is string => typeof value === 'string';
+
 const assertStringArray = (value: unknown, fieldName: string) => {
   if (!Array.isArray(value) || value.some((item) => !isNonEmptyString(item))) {
     throw new Error(`${fieldName} 必須是非空字串陣列。`);
@@ -53,6 +55,18 @@ export const assertCardConfig: (value: unknown) => asserts value is CardConfig =
   if (!isNonEmptyString(value.content.actionsTitle)) throw new Error('card.content.actionsTitle 必須存在。');
   if (!isNonEmptyString(value.content.actionsDescription)) throw new Error('card.content.actionsDescription 必須存在。');
   if (!isNonEmptyString(value.content.sharePanelTitle)) throw new Error('card.content.sharePanelTitle 必須存在。');
+
+  if (value.styles !== undefined) {
+    if (!isRecord(value.styles)) {
+      throw new Error('card.styles 必須是物件。');
+    }
+
+    Object.entries(value.styles).forEach(([styleKey, styleValue]) => {
+      if (styleValue !== undefined && !isString(styleValue)) {
+        throw new Error(`card.styles.${styleKey} 必須是字串。`);
+      }
+    });
+  }
 
   if (!Array.isArray(value.actions) || value.actions.some((action) => !isRecord(action) || !isNonEmptyString(action.id) || !isNonEmptyString(action.label))) {
     throw new Error('card.actions 內容格式不正確。');

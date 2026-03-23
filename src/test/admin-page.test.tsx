@@ -248,7 +248,7 @@ describe('AdminPage', () => {
     expect(screen.getByText('尚未儲存變更。重新整理或離開頁面前會提醒。')).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Updated By'), 'admin@test');
-    await user.click(screen.getByRole('button', { name: '儲存正式名片' }));
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -261,10 +261,11 @@ describe('AdminPage', () => {
           body: expect.stringContaining('"adminSession":"session-123"'),
         }),
       );
-      const saveCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"saveCard"'));
+      const saveCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"publishSnapshot"'));
       expect(String(saveCall?.[1]?.body || '')).toContain('"nameFontSize":"36"');
       expect(screen.getByText('目前沒有未儲存變更。')).toBeInTheDocument();
-      expect(screen.getByText(/正式名片已儲存。更新時間：2026-03-22T10:00:00.000Z｜更新者：admin@test/)).toBeInTheDocument();
+      expect(screen.getByText('已儲存正式名片，並建立版本「default-v-20260322t100000z」。')).toBeInTheDocument();
+      expect(screen.getByText('最近正式版本：default-v-20260322t100000z')).toBeInTheDocument();
     });
   });
 
@@ -288,10 +289,10 @@ describe('AdminPage', () => {
     fireEvent.change(screen.getByLabelText('圖片縮放'), { target: { value: '135' } });
     fireEvent.change(screen.getByLabelText('圖片焦點水平'), { target: { value: '-20' } });
     fireEvent.change(screen.getByLabelText('圖片焦點垂直'), { target: { value: '40' } });
-    await user.click(screen.getByRole('button', { name: '儲存正式名片' }));
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
 
     await waitFor(() => {
-      const saveCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"saveCard"'));
+      const saveCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"publishSnapshot"'));
       const body = String(saveCall?.[1]?.body || '');
       expect(body).toContain('"heroAspectRatio":"20:13"');
       expect(body).toContain('"heroAspectMode":"contain"');
@@ -418,7 +419,7 @@ describe('AdminPage', () => {
           });
         }
 
-        if (payload.action === 'saveCard') {
+        if (payload.action === 'publishSnapshot') {
           return createJsonResponse({ ok: false, error: '後台儲存失敗。' }, { status: 500 });
         }
       }
@@ -441,7 +442,7 @@ describe('AdminPage', () => {
     });
 
     await user.type(screen.getByLabelText('Updated By'), 'admin@test');
-    await user.click(screen.getByRole('button', { name: '儲存正式名片' }));
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
 
     await waitFor(() => {
       expect(screen.getByText('後台儲存失敗。')).toBeInTheDocument();
@@ -554,7 +555,7 @@ describe('AdminPage', () => {
     });
   });
 
-  it('publishes a new snapshot permalink from live/default', async () => {
+  it('saves an official card by creating a new immutable version and latest links', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     const fetchMock = buildFetchMock();
     vi.stubGlobal('fetch', fetchMock);
@@ -568,17 +569,17 @@ describe('AdminPage', () => {
       expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: '發佈為新版本' }));
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
 
     await waitFor(() => {
       const publishCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"publishSnapshot"'));
       expect(String(publishCall?.[1]?.body || '')).toContain('"slug":"default"');
-      expect(screen.getByText('目前 live/default 已同步儲存，並成功發佈一份不可變更的 snapshot。')).toBeInTheDocument();
-      expect(screen.getByText('目前可分享的 snapshot：default-v-20260322t100000z')).toBeInTheDocument();
+      expect(screen.getByText('已儲存正式名片，並建立版本「default-v-20260322t100000z」。')).toBeInTheDocument();
+      expect(screen.getByText('最近正式版本：default-v-20260322t100000z')).toBeInTheDocument();
     });
   });
 
-  it('separates web links and LIFF links, and keeps snapshot actions disabled before publish', async () => {
+  it('shows latest official actions and keeps them disabled before the first official version exists', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubGlobal('fetch', buildFetchMock());
@@ -590,18 +591,15 @@ describe('AdminPage', () => {
     await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
 
     await waitFor(() => {
-      expect(screen.getByText('一般網址')).toBeInTheDocument();
-      expect(screen.getByText('LIFF 分享網址')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '複製 live 網頁連結' })).toBeEnabled();
-      expect(screen.getByRole('button', { name: '複製 snapshot 網頁連結' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: '複製 live LIFF 連結' })).toBeEnabled();
-      expect(screen.getByRole('button', { name: '複製 snapshot LIFF 連結' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: '分享此快照' })).toBeDisabled();
-      expect(screen.getByText('snapshot 網頁連結：尚未發佈 snapshot。')).toBeInTheDocument();
+      expect(screen.getByText('最新正式連結')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '直接分享最新正式版本' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '複製最新正式 LIFF 連結' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '複製最新正式網頁連結' })).toBeDisabled();
+      expect(screen.getByText('最近正式版本：尚未建立。')).toBeInTheDocument();
     });
   });
 
-  it('copies distinct live and snapshot web and LIFF links', async () => {
+  it('copies distinct latest official web and LIFF links after save', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubGlobal('fetch', buildFetchMock());
@@ -615,25 +613,24 @@ describe('AdminPage', () => {
       expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: '發佈為新版本' }));
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '複製 snapshot 網頁連結' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '複製最新正式網頁連結' })).toBeEnabled();
     });
 
-    await user.click(screen.getByRole('button', { name: '複製 live 網頁連結' }));
-    await user.click(screen.getByRole('button', { name: '複製 snapshot 網頁連結' }));
-    await user.click(screen.getByRole('button', { name: '複製 live LIFF 連結' }));
-    await user.click(screen.getByRole('button', { name: '複製 snapshot LIFF 連結' }));
+    await user.click(screen.getByRole('button', { name: '複製最新正式網頁連結' }));
+    await user.click(screen.getByRole('button', { name: '複製最新正式 LIFF 連結' }));
+    await user.click(screen.getByRole('button', { name: '複製 LIFF 連結' }));
+    await user.click(screen.getByRole('button', { name: '複製網頁連結' }));
 
     await waitFor(() => {
-      expect(screen.getByText('已複製snapshot LIFF permanent link。')).toBeInTheDocument();
+      expect(screen.getByText('已複製版本 default-v-20260322t100000z 的網頁連結。')).toBeInTheDocument();
     });
 
-    expect(createCardPermanentLinkForSlugMock).toHaveBeenCalledWith('default');
     expect(createCardPermanentLinkForSlugMock).toHaveBeenCalledWith('default-v-20260322t100000z');
   });
 
-  it('shares live and snapshot Flex with the matching version payloads', async () => {
+  it('shares the latest official version and a selected history version with fixed payloads', async () => {
     vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubGlobal('fetch', buildFetchMock());
@@ -647,13 +644,13 @@ describe('AdminPage', () => {
       expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: '發佈為新版本' }));
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '分享此快照' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '直接分享最新正式版本' })).toBeEnabled();
     });
 
-    await user.click(screen.getByRole('button', { name: '分享最新 live' }));
-    await user.click(screen.getByRole('button', { name: '分享此快照' }));
+    await user.click(screen.getByRole('button', { name: '直接分享最新正式版本' }));
+    await user.click(screen.getByRole('button', { name: '直接分享此版本' }));
 
     await waitFor(() => {
       expect(shareFlexCardMessageMock).toHaveBeenCalledTimes(2);
@@ -662,9 +659,12 @@ describe('AdminPage', () => {
     expect(shareFlexCardMessageMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        slug: 'default',
+        slug: 'default-v-20260322t100000z',
+        version: expect.objectContaining({
+          kind: 'snapshot',
+        }),
       }),
-      'http://localhost:3000/card/default/',
+      'http://localhost:3000/card/default-v-20260322t100000z/',
     );
     expect(shareFlexCardMessageMock).toHaveBeenNthCalledWith(
       2,
@@ -693,12 +693,180 @@ describe('AdminPage', () => {
       expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: '分享最新 live' }));
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '直接分享最新正式版本' })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: '直接分享最新正式版本' }));
 
     await waitFor(() => {
-      expect(createCardPermanentLinkForSlugMock).toHaveBeenCalledWith('default');
+      expect(createCardPermanentLinkForSlugMock).toHaveBeenCalledWith('default-v-20260322t100000z');
       expect(shareFlexCardMessageMock).not.toHaveBeenCalled();
       expect(screen.getByText(/請在 LINE 中開啟後再傳送 Flex/)).toBeInTheDocument();
+    });
+  });
+
+  it('loads a history version into the editor without exposing legacy versioning terms in the main UI', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '載入到編輯區' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '載入到編輯區' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('已把版本「default-v-20260322t100000z」載入編輯區。')).toBeInTheDocument();
+      expect(screen.queryByText('切回 live/default')).not.toBeInTheDocument();
+      expect(screen.queryByText('發佈為新版本')).not.toBeInTheDocument();
+      expect(screen.queryByText(/live\/default 與 snapshot 發佈/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('creates a new official permalink on every save without overwriting older versions', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+
+    let publishCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (init?.method === 'POST') {
+        const payload = JSON.parse(String(init.body || '{}')) as { action?: string; config?: typeof defaultCard };
+
+        if (payload.action === 'createAdminSession') {
+          return createJsonResponse({
+            ok: true,
+            adminSession: 'session-123',
+            expiresAt: '2026-03-22T12:00:00.000Z',
+          });
+        }
+
+        if (payload.action === 'publishSnapshot') {
+          publishCount += 1;
+          const versionId = publishCount === 1 ? '20260322T100000Z' : '20260322T100500Z';
+          const publishedAt = publishCount === 1 ? '2026-03-22T10:00:00.000Z' : '2026-03-22T10:05:00.000Z';
+          const slug = publishCount === 1 ? 'default-v-20260322t100000z' : 'default-v-20260322t100500z';
+          const snapshotConfig = cloneCardConfig((payload.config as typeof defaultCard) ?? defaultCard);
+          snapshotConfig.slug = slug;
+          snapshotConfig.version = {
+            kind: 'snapshot',
+            versionId,
+            publishedAt,
+            liveSlug: 'default',
+            sourceSlug: 'default',
+          };
+
+          return createJsonResponse({
+            ok: true,
+            slug,
+            updatedAt: publishedAt,
+            updatedBy: 'admin@test',
+            versionId,
+            publishedAt,
+            config: snapshotConfig,
+          });
+        }
+      }
+
+      if (url.includes('action=listCards')) {
+        const cards: Array<Record<string, unknown>> = [
+          {
+            slug: 'default',
+            isLive: true,
+            updatedAt: '2026-03-22T10:05:00.000Z',
+            updatedBy: 'admin@test',
+          },
+        ];
+
+        if (publishCount >= 1) {
+          cards.push({
+            slug: 'default-v-20260322t100000z',
+            isLive: false,
+            versionId: '20260322T100000Z',
+            publishedAt: '2026-03-22T10:00:00.000Z',
+          });
+        }
+        if (publishCount >= 2) {
+          cards.push({
+            slug: 'default-v-20260322t100500z',
+            isLive: false,
+            versionId: '20260322T100500Z',
+            publishedAt: '2026-03-22T10:05:00.000Z',
+          });
+        }
+
+        return createJsonResponse({ ok: true, cards });
+      }
+
+      if (url.includes('action=getCard')) {
+        const requestedUrl = new URL(url);
+        const slug = requestedUrl.searchParams.get('slug') ?? 'default';
+        if (slug === 'default-v-20260322t100000z' || slug === 'default-v-20260322t100500z') {
+          const snapshotConfig = cloneCardConfig(defaultCard);
+          snapshotConfig.slug = slug;
+          snapshotConfig.version = {
+            kind: 'snapshot',
+            versionId: slug === 'default-v-20260322t100000z' ? '20260322T100000Z' : '20260322T100500Z',
+            publishedAt: slug === 'default-v-20260322t100000z' ? '2026-03-22T10:00:00.000Z' : '2026-03-22T10:05:00.000Z',
+            liveSlug: 'default',
+            sourceSlug: 'default',
+          };
+          return createJsonResponse({ ok: true, slug, config: snapshotConfig });
+        }
+
+        return createJsonResponse({
+          ok: true,
+          slug: 'default',
+          config: defaultCard,
+        });
+      }
+
+      if (url.includes('action=verifyAdminSession')) {
+        return createJsonResponse({
+          ok: true,
+          valid: true,
+          expiresAt: '2026-03-22T12:00:00.000Z',
+        });
+      }
+
+      return createJsonResponse({ ok: false, error: `Unhandled request: ${url}` }, { status: 500 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('最近正式版本：default-v-20260322t100000z')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getAllByRole('button', { name: '儲存正式名片' })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('最近正式版本：default-v-20260322t100500z')).toBeInTheDocument();
+      expect(screen.getByText('default-v-20260322t100000z')).toBeInTheDocument();
+      expect(screen.getByText('default-v-20260322t100500z')).toBeInTheDocument();
     });
   });
 

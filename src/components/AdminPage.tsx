@@ -11,7 +11,6 @@ import {
   type AssetUploadState,
   coerceDraft,
   type DraftRestoreState,
-  formatSaveMessage,
   formatSessionLabel,
   getImageFieldError,
   getLinkFieldError,
@@ -37,7 +36,6 @@ import {
   getCardApiBaseUrl,
   listRemoteCards,
   publishSnapshotCard,
-  saveRemoteCardConfig,
   uploadRuntimeImage,
   verifyAdminSession,
 } from '../lib/card-source';
@@ -700,7 +698,7 @@ export function AdminPage() {
   const [lastSavedBy, setLastSavedBy] = useState<string | undefined>(undefined);
   const [versionRecords, setVersionRecords] = useState<CardRecordSummary[]>([]);
   const [versionStatus, setVersionStatus] = useState<StatusMessage | null>(null);
-  const [lastPublishedSnapshot, setLastPublishedSnapshot] = useState<CardRecordSummary | null>(null);
+  const [lastPublishedVersion, setLastPublishedVersion] = useState<CardRecordSummary | null>(null);
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
 
   const draftSnapshot = useMemo(() => serializeCardConfig(draft), [draft]);
@@ -726,25 +724,21 @@ export function AdminPage() {
     }) as CSSProperties,
     [heroStyleTokens],
   );
-  const currentCardRecord = useMemo(() => {
-    const isLive = draft.slug === 'default' && draft.version?.kind !== 'snapshot';
-
-    return {
+  const workingDraftRecord = useMemo(
+    () => ({
       slug: draft.slug,
-      isLive,
       versionId: draft.version?.versionId ?? '',
       publishedAt: draft.version?.publishedAt ?? '',
-    };
-  }, [draft]);
-  const liveWebUrl = useMemo(() => getCardWebShareUrl('default'), []);
-  const canonicalLiveLiffUrl = useMemo(() => getCanonicalLiffShareUrl('default'), []);
-  const latestSnapshotRecord = useMemo(() => {
-    const snapshots = [...versionRecords.filter((record) => !record.isLive)];
-    if (lastPublishedSnapshot && !snapshots.some((record) => record.slug === lastPublishedSnapshot.slug)) {
-      snapshots.push(lastPublishedSnapshot);
+    }),
+    [draft],
+  );
+  const latestPublishedRecord = useMemo(() => {
+    const publishedRecords = [...versionRecords.filter((record) => !record.isLive)];
+    if (lastPublishedVersion && !publishedRecords.some((record) => record.slug === lastPublishedVersion.slug)) {
+      publishedRecords.push(lastPublishedVersion);
     }
 
-    return snapshots.sort((left, right) => {
+    return publishedRecords.sort((left, right) => {
       const leftTime = Date.parse(left.publishedAt ?? left.updatedAt ?? '');
       const rightTime = Date.parse(right.publishedAt ?? right.updatedAt ?? '');
       if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
@@ -753,23 +747,26 @@ export function AdminPage() {
 
       return right.slug.localeCompare(left.slug);
     })[0] ?? null;
-  }, [lastPublishedSnapshot, versionRecords]);
-  const activeSnapshotRecord = currentCardRecord.isLive
-    ? latestSnapshotRecord
-    : {
-        slug: currentCardRecord.slug,
-        isLive: false,
-        versionId: currentCardRecord.versionId,
-        publishedAt: currentCardRecord.publishedAt,
-      };
-  const snapshotShareSlug = activeSnapshotRecord?.slug ?? '';
-  const snapshotWebUrl = snapshotShareSlug ? getCardWebShareUrl(snapshotShareSlug) : '';
-  const canonicalSnapshotLiffUrl = snapshotShareSlug ? getCanonicalLiffShareUrl(snapshotShareSlug) : '';
-  const snapshotStatusCopy = currentCardRecord.isLive
-    ? snapshotShareSlug
-      ? `目前可分享的 snapshot：${snapshotShareSlug}`
-      : '目前尚未發佈 snapshot，因此不提供 snapshot 網址或 LIFF 分享。'
-    : `目前載入的是 snapshot：${snapshotShareSlug}`;
+  }, [lastPublishedVersion, versionRecords]);
+  const latestPublishedSlug = latestPublishedRecord?.slug ?? '';
+  const latestPublishedWebUrl = latestPublishedSlug ? getCardWebShareUrl(latestPublishedSlug) : '';
+  const canonicalLatestPublishedLiffUrl = latestPublishedSlug ? getCanonicalLiffShareUrl(latestPublishedSlug) : '';
+  const publishedVersionRecords = useMemo(() => {
+    const records = [...versionRecords.filter((record) => !record.isLive)];
+    if (lastPublishedVersion && !records.some((record) => record.slug === lastPublishedVersion.slug)) {
+      records.push(lastPublishedVersion);
+    }
+
+    return records.sort((left, right) => {
+      const leftTime = Date.parse(left.publishedAt ?? left.updatedAt ?? '');
+      const rightTime = Date.parse(right.publishedAt ?? right.updatedAt ?? '');
+      if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+
+      return right.slug.localeCompare(left.slug);
+    });
+  }, [lastPublishedVersion, versionRecords]);
 
   useEffect(() => {
     applyBasicSeo(ADMIN_TITLE, ADMIN_DESCRIPTION);
@@ -879,11 +876,11 @@ export function AdminPage() {
       setVersionStatus(records.length
         ? {
             tone: 'success',
-            text: `已載入 ${records.length} 筆 live / snapshot 版本資訊。`,
+            text: `已載入 ${records.length} 筆版本資料。`,
           }
         : {
             tone: 'info',
-            text: '目前還沒有任何 snapshot，只有 live/default。',
+            text: '目前還沒有任何正式版本。',
           });
     } catch (error) {
       setVersionStatus({
@@ -923,15 +920,15 @@ export function AdminPage() {
   const copyLiffLink = async (slug: string, label: string) => {
     try {
       const permanentLink = await createCardPermanentLinkForSlug(slug);
-      await copyText(permanentLink, `已複製${label} LIFF permanent link。`);
+      await copyText(permanentLink, `已複製${label}LIFF 連結。`);
     } catch (error) {
       const fallbackUrl = getCanonicalLiffShareUrl(slug);
-      const detail = error instanceof Error ? error.message : '目前無法建立 LIFF permanent link。';
+      const detail = error instanceof Error ? error.message : '目前無法建立 LIFF 連結。';
 
       if (fallbackUrl) {
         await copyText(
           fallbackUrl,
-          `目前無法建立${label} LIFF permanent link；已改為複製 LIFF 入口連結，請在 LINE 中開啟後再分享。`,
+          `目前無法建立${label}LIFF permanent link；已改為複製 LIFF 入口連結，請在 LINE 中開啟後再分享。`,
         );
         return;
       }
@@ -998,9 +995,10 @@ export function AdminPage() {
   const buildLiveDraftForBaseline = (config: CardConfig): CardConfig =>
     normalizeLoadedDraft({
       ...config,
+      slug: config.version?.liveSlug || 'default',
       version: {
         kind: 'live',
-        liveSlug: config.slug,
+        liveSlug: config.version?.liveSlug || config.slug || 'default',
         sourceSlug: config.slug,
       },
     });
@@ -1772,19 +1770,11 @@ export function AdminPage() {
     });
   };
 
-  const handleSaveRemote = async () => {
+  const handlePublishOfficial = async () => {
     if (!adminSession.trim()) {
       setRemoteStatus({
         tone: 'error',
         text: '請先完成管理員解鎖，才能儲存正式名片。',
-      });
-      return;
-    }
-
-    if (!currentCardRecord.isLive) {
-      setRemoteStatus({
-        tone: 'error',
-        text: '目前載入的是 snapshot，不能直接覆寫。請先切回 live/default 再儲存。',
       });
       return;
     }
@@ -1799,95 +1789,9 @@ export function AdminPage() {
 
     setRemoteStatus({
       tone: 'info',
-      text: '正在儲存正式 runtime config...',
+      text: '正在儲存編輯中名片，並建立新的正式版本...',
     });
-
-    try {
-      const result = await saveRemoteCardConfig(draft.slug, draft, {
-        baseUrl: apiBaseUrl,
-        adminSession,
-        updatedBy,
-      });
-      applyOfficialConfig(result.config, '已完成正式儲存。畫面上的內容就是目前正式名片版本。');
-      setLastSavedAt(result.updatedAt);
-      setLastSavedBy(result.updatedBy);
-      setRemoteStatus({
-        tone: 'success',
-        text: formatSaveMessage(result.updatedAt, result.updatedBy),
-      });
-      await refreshVersionList();
-    } catch (error) {
-      setRemoteStatus({
-        tone: 'error',
-        text: handleProtectedActionError(error, '儲存正式名片失敗。'),
-      });
-    }
-  };
-
-  const handleLoadCardVersion = async (slug: string) => {
-    if (!adminSession.trim()) {
-      setVersionStatus({
-        tone: 'error',
-        text: '請先完成管理員解鎖，再載入版本。',
-      });
-      return;
-    }
-
-    if (hasUnsavedChanges && !window.confirm('目前有尚未儲存的變更，切換版本會覆蓋本地草稿。要繼續嗎？')) {
-      return;
-    }
-
-    setVersionStatus({
-      tone: 'info',
-      text: `正在載入版本「${slug}」...`,
-    });
-
-    try {
-      const remoteConfig = await fetchRemoteCardConfig(slug, {
-        baseUrl: apiBaseUrl,
-      });
-      applyOfficialConfig(remoteConfig, `已切換到 slug「${slug}」的版本內容。`);
-      setVersionStatus({
-        tone: 'success',
-        text: `已載入版本「${slug}」。`,
-      });
-    } catch (error) {
-      setVersionStatus({
-        tone: 'error',
-        text: handleProtectedActionError(error, '載入版本失敗。'),
-      });
-    }
-  };
-
-  const handlePublishSnapshot = async () => {
-    if (!adminSession.trim()) {
-      setVersionStatus({
-        tone: 'error',
-        text: '請先完成管理員解鎖，才能發佈快照。',
-      });
-      return;
-    }
-
-    if (!currentCardRecord.isLive) {
-      setVersionStatus({
-        tone: 'error',
-        text: '目前載入的是 snapshot，不能再發佈。請先切回 live/default。',
-      });
-      return;
-    }
-
-    if (validationErrors.length > 0) {
-      setVersionStatus({
-        tone: 'error',
-        text: '目前欄位仍有錯誤，請先修正後再發佈快照。',
-      });
-      return;
-    }
-
-    setVersionStatus({
-      tone: 'info',
-      text: '正在將目前 live/default 發佈為 immutable snapshot...',
-    });
+    setVersionStatus(null);
 
     try {
       const result = await publishSnapshotCard(draft.slug, draft, {
@@ -1899,9 +1803,10 @@ export function AdminPage() {
       setDraft(nextLiveDraft);
       setBaselineConfig(cloneCardConfig(nextLiveDraft));
       setDraftRestoreState(null);
+      setLocalDraftNote('編輯中名片已同步為最新內容；每次按下「儲存正式名片」都會另外保留一份固定正式版本。');
       setLastSavedAt(result.updatedAt);
       setLastSavedBy(result.updatedBy);
-      setLastPublishedSnapshot({
+      setLastPublishedVersion({
         slug: result.slug,
         isLive: false,
         versionId: result.versionId,
@@ -1909,20 +1814,58 @@ export function AdminPage() {
         updatedAt: result.updatedAt,
         updatedBy: result.updatedBy,
       });
-      setLocalDraftNote('目前 live/default 已同步儲存，並成功發佈一份不可變更的 snapshot。');
       setRemoteStatus({
         tone: 'success',
-        text: `已儲存 live/default，並發佈 snapshot「${result.slug}」。`,
+        text: `已儲存正式名片，並建立版本「${result.slug}」。`,
       });
       setVersionStatus({
         tone: 'success',
-        text: `已發佈 snapshot「${result.slug}」。`,
+        text: `最新正式版本已更新為「${result.slug}」。`,
       });
       await refreshVersionList();
     } catch (error) {
+      setRemoteStatus({
+        tone: 'error',
+        text: handleProtectedActionError(error, '儲存正式名片失敗。'),
+      });
+    }
+  };
+
+  const handleLoadVersionIntoEditor = async (slug: string) => {
+    if (!adminSession.trim()) {
       setVersionStatus({
         tone: 'error',
-        text: handleProtectedActionError(error, '發佈 snapshot 失敗。'),
+        text: '請先完成管理員解鎖，再載入版本到編輯區。',
+      });
+      return;
+    }
+
+    if (hasUnsavedChanges && !window.confirm('目前有尚未儲存的變更，切換版本會覆蓋本地草稿。要繼續嗎？')) {
+      return;
+    }
+
+    setVersionStatus({
+      tone: 'info',
+      text: `正在將版本「${slug}」載入到編輯區...`,
+    });
+
+    try {
+      const remoteConfig = await fetchRemoteCardConfig(slug, {
+        baseUrl: apiBaseUrl,
+      });
+      const editableDraft = buildLiveDraftForBaseline(remoteConfig);
+      setDraft(editableDraft);
+      setBaselineConfig(cloneCardConfig(editableDraft));
+      setDraftRestoreState(null);
+      setLocalDraftNote(`已把版本「${slug}」載入編輯區。這不會覆蓋正式資料，直到你再次按下「儲存正式名片」。`);
+      setVersionStatus({
+        tone: 'success',
+        text: `已把版本「${slug}」載入編輯區。`,
+      });
+    } catch (error) {
+      setVersionStatus({
+        tone: 'error',
+        text: handleProtectedActionError(error, '載入版本到編輯區失敗。'),
       });
     }
   };
@@ -2017,15 +1960,6 @@ export function AdminPage() {
       return;
     }
 
-    if (!currentCardRecord.isLive) {
-      setAssetUploadStatus({
-        activeField: field,
-        tone: 'error',
-        text: '目前載入的是 snapshot；快照不可變更，請先切回 live/default。',
-      });
-      return;
-    }
-
     if (field === 'photo') {
       photoUploadInputRef.current?.click();
       return;
@@ -2087,7 +2021,7 @@ export function AdminPage() {
           <p className="eyebrow">Admin Console</p>
           <h1 className="admin-title">正式電子名片後台</h1>
           <p className="admin-copy">
-            這裡是正式 runtime config 管理台。解鎖後可維護最新 live/default，並將當下內容發佈成可長期分享的 snapshot permalink。
+            這裡是正式電子名片後台。你只需要維護一份編輯中名片；每次按下「儲存正式名片」，系統會自動建立新的固定正式版本與分享連結。
           </p>
         </div>
         <div className="admin-note-card">
@@ -2153,7 +2087,7 @@ export function AdminPage() {
                 <p className="section-label">本地草稿提示</p>
                 <h2 className="admin-panel-title">偵測到未送出的瀏覽器草稿</h2>
               </div>
-              <p className="support-copy">這份草稿尚未覆蓋正式資料。你可以先套用檢查，或丟棄後重新載入正式 runtime config。</p>
+              <p className="support-copy">這份草稿尚未覆蓋正式資料。你可以先套用檢查，或丟棄後重新載入目前的編輯中名片。</p>
               <div className="admin-inline-actions">
                 <button type="button" className="action-button action-button-secondary" onClick={handleApplyStoredDraft}>
                   套用本地草稿
@@ -2166,96 +2100,83 @@ export function AdminPage() {
           ) : null}
 
           <section className="admin-panel admin-panel-spacious">
-            <div className="admin-section-heading">
+              <div className="admin-section-heading">
               <p className="section-label">版本操作</p>
-              <h2 className="admin-panel-title">live/default 與 snapshot 發佈</h2>
-              <p className="support-copy">`default` 仍是最新 live 版本；每次發佈會複製目前內容，產生一張不可變更的 snapshot permalink。</p>
+              <h2 className="admin-panel-title">編輯中名片與正式版本</h2>
+              <p className="support-copy">後台只維護一份編輯中名片；每次儲存正式名片時，系統會自動保留一份不可變更的正式版本。</p>
             </div>
             <div className="admin-field-grid">
               <div className="admin-info-card">
-                <p className="section-label">目前模式</p>
-                <p className="support-copy">{currentCardRecord.isLive ? 'live/default' : 'snapshot'}</p>
-                <p className="support-copy">{`slug：${currentCardRecord.slug}`}</p>
-                <p className="support-copy">{currentCardRecord.versionId ? `versionId：${currentCardRecord.versionId}` : '目前尚未綁定 snapshot versionId。'}</p>
-                <p className="support-copy">{currentCardRecord.publishedAt ? `發佈時間：${currentCardRecord.publishedAt}` : '目前是 live/default。'}</p>
+                <p className="section-label">目前狀態</p>
+                <p className="support-copy">編輯中名片：目前這份內容就是你下一次要儲存的版本來源。</p>
+                <p className="support-copy">{`編輯中識別：${workingDraftRecord.slug}`}</p>
+                <p className="support-copy">{latestPublishedRecord ? `最近正式版本：${latestPublishedRecord.slug}` : '最近正式版本：尚未建立。'}</p>
+                <p className="support-copy">{latestSaveLabel || '最近儲存時間：尚未於本分頁建立。'}</p>
               </div>
               <div className="admin-info-card">
-                <p className="section-label">分享模式</p>
-                <p className="support-copy">一般網址用於網頁 permalink；LIFF 連結用於 LINE 內開啟；「分享最新 live / 分享此快照」會優先直接送出 Flex Message。</p>
-                <p className="support-copy">{snapshotStatusCopy}</p>
-                <p className="support-copy">{canonicalLiveLiffUrl ? `LIFF 入口：${canonicalLiveLiffUrl}` : '目前未設定 LIFF ID。'}</p>
+                <p className="section-label">最新正式連結</p>
+                <p className="support-copy">每次儲存正式名片後，系統都會產生新的固定網頁連結與固定 LIFF 連結。</p>
+                <p className="support-copy">{latestPublishedWebUrl ? `最新正式網頁：${latestPublishedWebUrl}` : '最新正式網頁：尚未建立。'}</p>
+                <p className="support-copy">{canonicalLatestPublishedLiffUrl ? `最新正式 LIFF 入口：${canonicalLatestPublishedLiffUrl}` : '最新正式 LIFF 入口：尚未建立或未設定 LIFF ID。'}</p>
               </div>
             </div>
-            <div className="admin-info-card">
-              <p className="section-label">一般網址</p>
-              <p className="support-copy">{`live 網頁連結：${liveWebUrl}`}</p>
-              <p className="support-copy">{snapshotWebUrl ? `snapshot 網頁連結：${snapshotWebUrl}` : 'snapshot 網頁連結：尚未發佈 snapshot。'}</p>
-            </div>
-            <div className="admin-info-card">
-              <p className="section-label">LIFF 分享網址</p>
-              <p className="support-copy">下方按鈕會嘗試產生 LIFF permanent link；若當前環境不支援，會退回複製 LIFF 入口網址。</p>
-              <p className="support-copy">{`live LIFF 入口：${canonicalLiveLiffUrl || '未設定 LIFF ID'}`}</p>
-              <p className="support-copy">{canonicalSnapshotLiffUrl ? `snapshot LIFF 入口：${canonicalSnapshotLiffUrl}` : 'snapshot LIFF 入口：尚未發佈 snapshot。'}</p>
-            </div>
             <div className="admin-inline-actions admin-inline-actions-3">
-              <button type="button" className="action-button action-button-primary" onClick={() => void handlePublishSnapshot()} disabled={!currentCardRecord.isLive}>
-                發佈為新版本
-              </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => void copyWebLink('default', 'live ')}>
-                複製 live 網頁連結
+              <button type="button" className="action-button action-button-primary" onClick={() => void handlePublishOfficial()}>
+                儲存正式名片
               </button>
               <button
                 type="button"
                 className="action-button action-button-secondary"
-                onClick={() => void copyWebLink(snapshotShareSlug, 'snapshot ')}
-                disabled={!snapshotShareSlug}
+                onClick={() => void shareFlexVersion(latestPublishedSlug, '最新正式版本')}
+                disabled={!latestPublishedSlug}
               >
-                複製 snapshot 網頁連結
-              </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => void copyLiffLink('default', 'live ')}>
-                複製 live LIFF 連結
+                直接分享最新正式版本
               </button>
               <button
                 type="button"
                 className="action-button action-button-secondary"
-                onClick={() => void copyLiffLink(snapshotShareSlug, 'snapshot ')}
-                disabled={!snapshotShareSlug}
+                onClick={() => void copyLiffLink(latestPublishedSlug, '最新正式')}
+                disabled={!latestPublishedSlug}
               >
-                複製 snapshot LIFF 連結
-              </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => void shareFlexVersion('default', 'live')}>
-                分享最新 live
+                複製最新正式 LIFF 連結
               </button>
               <button
                 type="button"
                 className="action-button action-button-secondary"
-                onClick={() => void shareFlexVersion(snapshotShareSlug, 'snapshot')}
-                disabled={!snapshotShareSlug}
+                onClick={() => void copyWebLink(latestPublishedSlug, '最新正式')}
+                disabled={!latestPublishedSlug}
               >
-                分享此快照
-              </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => void handleLoadCardVersion('default')} disabled={currentCardRecord.isLive}>
-                切回 live/default
+                複製最新正式網頁連結
               </button>
             </div>
             <StatusBanner status={versionStatus} />
             <div className="admin-info-card">
-              <p className="section-label">版本列表</p>
-              {versionRecords.length ? (
-                <div className="admin-inline-actions admin-inline-actions-3">
-                  {versionRecords.map((record) => (
-                    <button
-                      key={record.slug}
-                      type="button"
-                      className="action-button action-button-secondary"
-                      onClick={() => void handleLoadCardVersion(record.slug)}
-                    >
-                      {record.isLive ? `live｜${record.slug}` : `${record.slug}${record.publishedAt ? `｜${record.publishedAt}` : ''}`}
-                    </button>
+              <p className="section-label">歷史版本</p>
+              {publishedVersionRecords.length ? (
+                <div className="admin-field-grid">
+                  {publishedVersionRecords.map((record) => (
+                    <div key={record.slug} className="admin-info-card">
+                      <p className="support-copy">{record.slug}</p>
+                      <p className="support-copy">{record.publishedAt ? `建立時間：${record.publishedAt}` : '建立時間：未記錄'}</p>
+                      <div className="admin-inline-actions admin-inline-actions-3">
+                        <button type="button" className="action-button action-button-secondary" onClick={() => void copyLiffLink(record.slug, `版本 ${record.slug} 的`)}>
+                          複製 LIFF 連結
+                        </button>
+                        <button type="button" className="action-button action-button-secondary" onClick={() => void copyWebLink(record.slug, `版本 ${record.slug} 的`)}>
+                          複製網頁連結
+                        </button>
+                        <button type="button" className="action-button action-button-secondary" onClick={() => void shareFlexVersion(record.slug, `版本 ${record.slug}`)}>
+                          直接分享此版本
+                        </button>
+                        <button type="button" className="action-button action-button-secondary" onClick={() => void handleLoadVersionIntoEditor(record.slug)}>
+                          載入到編輯區
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
-                <p className="support-copy">目前尚未載入任何版本資訊。</p>
+                <p className="support-copy">目前尚未建立任何正式版本。</p>
               )}
             </div>
           </section>
@@ -2307,7 +2228,7 @@ export function AdminPage() {
                   <div className="admin-info-card">
                     <p className="section-label">解鎖狀態</p>
                     <p className="support-copy">{isUnlocked ? '目前已解鎖，可儲存與上傳圖片。' : '尚未解鎖，儲存與圖片上傳會被擋下。'}</p>
-                    <p className="support-copy">{currentCardRecord.isLive ? '目前是 live/default，可儲存與發佈。' : '目前是 snapshot，只建議檢視與分享，不可儲存或上傳。'}</p>
+                    <p className="support-copy">目前編輯區固定維持在可編輯狀態；歷史版本只會被讀取、分享，或載入成新的編輯內容。</p>
                     <p className="support-copy">{sessionExpiresAt ? `Session 到期：${sessionExpiresAt}` : '本分頁沒有有效 session。'}</p>
                   </div>
                   <div className="admin-info-card">
@@ -2323,7 +2244,7 @@ export function AdminPage() {
                   <button type="button" className="action-button action-button-secondary" onClick={handleReset}>
                     重設成本地預設
                   </button>
-                  <button type="button" className="action-button action-button-primary" onClick={() => void handleSaveRemote()} disabled={!currentCardRecord.isLive}>
+                  <button type="button" className="action-button action-button-primary" onClick={() => void handlePublishOfficial()}>
                     儲存正式名片
                   </button>
                 </div>

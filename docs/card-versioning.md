@@ -1,73 +1,57 @@
 # Card Versioning
 
-## live card 與 snapshot card
+## 使用者如何理解版本
 
-- `slug=default` 仍是唯一的 live card。`/card/default/` 永遠代表目前最新正式版本。
-- 每次從 `/admin/` 按下「發佈為新版本」，系統會先把目前 draft 寫回 live/default，再複製一份 immutable snapshot row 到同一張 `cards_runtime` sheet。
-- snapshot row 會有自己的 `slug`、`versionId`、`publishedAt`，例如 `default-v-20260322t100000z`。
+- 後台只有一份「編輯中名片」。
+- 每次按下「儲存正式名片」，系統都會先保存這份編輯中內容，再另外建立一份不可變更的「正式版本」。
+- 正式版本會得到自己的固定網頁 permalink 與固定 LIFF permalink。
+- 舊的正式版本會留在歷史版本列表中，之後仍可分享，不會被新版覆蓋。
 
-## 分享規則
+## 系統內部怎麼實作
 
-- 分享 live 一般網址：連到 `/card/default/`，之後後台再更新，打開的人會看到最新 live。
-- 分享 snapshot 一般網址：連到 `/card/<snapshot-slug>/`，之後後台再更新 live，也不會覆蓋這個 snapshot。
-- 分享 live LIFF：仍然對應 live/default，但會先轉成 LIFF permanent link，再由 LINE 開啟同一張正式卡片。
-- 分享 snapshot LIFF：對應固定 snapshot slug 的 LIFF permanent link，之後 live 再更新也不會漂移。
-- 舊卡再轉傳：如果原始連結是 snapshot permalink，再轉傳仍會是同一個 snapshot slug；如果原始連結是 live/default，再轉傳仍會指向最新 live。
-- 直接送 Flex Message 時，live 與 snapshot 都會沿用自己的 slug/pageUrl，因此連出去的 hero 與 footer URI 也會維持同一版。
+- internal working draft 仍然使用 `slug=default`。
+- 每次儲存正式名片時，前端會呼叫既有的 `publishSnapshot` contract。
+- GAS 會先把最新編輯內容寫回 `default` row，再複製出一筆 immutable version row。
+- 這個 immutable row 目前仍沿用既有 snapshot slug 規則，例如 `default-v-20260322t100000z`。
+- `default` 與 immutable rows 仍共用同一張 `cards_runtime` sheet，不需要搬資料。
 
-## 後台操作
+## 最新正式版本與歷史版本
 
-1. 解鎖 `/admin/`。
-2. 編輯 live/default 內容，必要時先確認預覽。
-3. 按「發佈為新版本」。
-4. 系統會：
-   - 儲存目前 live/default
-   - 建立新的 snapshot row
-   - 生成固定 permalink
-   - 在版本列表中顯示新 snapshot
-5. 後台版本區會提供：
-   - `複製 live 網頁連結`
-   - `複製 snapshot 網頁連結`
-   - `複製 live LIFF 連結`
-   - `複製 snapshot LIFF 連結`
-   - `分享最新 live`
-   - `分享此快照`
+- 最新正式版本：所有 immutable versions 中，`publishedAt` 最新的一筆。
+- 歷史版本：所有較早建立的 immutable versions。
+- 最新正式版本會直接顯示在 `/admin/` 的狀態區與主要操作區。
+- 歷史版本列表會提供複製 LIFF、複製網頁、直接分享、載入到編輯區等操作。
 
-## 為什麼一般網址不等於 LIFF 分享入口
+## 為什麼每次儲存正式名片都會產生新固定連結
 
-- 一般網址只是公開網頁 permalink，任何瀏覽器都能開。
-- LIFF 分享入口需要先進入 LIFF Endpoint URL 範圍，才能使用 `liff.init()`、`permanentLink.createUrlBy()` 與 `shareTargetPicker()`。
-- 因此 `/admin/` 內必須把「複製網頁連結」和「複製 LIFF 連結 / 直接用 LIFF 分享」分開，否則使用者會誤以為 GitHub Pages permalink 就能直接叫出 LINE 分享器。
+- 因為每次正式儲存都會建立新的 immutable row。
+- 新 row 有自己的 `slug`、`versionId`、`publishedAt`。
+- 網頁 permalink 與 LIFF permalink 都是以該版本 slug 為核心建立。
+- 所以第二次、第三次儲存正式名片時，都會得到新的固定連結。
 
-## 後台按鈕用途
+## 為什麼舊連結不會消失
 
-- `複製 live 網頁連結`：拿到最新 live/default 的公開網址。
-- `複製 snapshot 網頁連結`：拿到固定 snapshot permalink。
-- `複製 live LIFF 連結`：建立 live/default 的 LIFF permanent link，適合貼回 LINE 對話再開啟。
-- `複製 snapshot LIFF 連結`：建立固定 snapshot 的 LIFF permanent link。
-- `分享最新 live`：在 LIFF 可用時直接呼叫 `shareTargetPicker()` 發送 live Flex。
-- `分享此快照`：在 LIFF 可用時直接呼叫 `shareTargetPicker()` 發送 snapshot Flex。
+- 舊版本不是被覆寫，而是保留原本那一筆 immutable row。
+- 舊連結仍會指向原本的版本 slug。
+- 後續更新只會改 `default` 與建立新的 immutable row，不會回寫舊版本。
+- GAS 仍會拒絕對 immutable version row 直接執行編輯與圖片上傳。
 
-## 外部瀏覽器 fallback
+## `/admin/` 的實際操作
 
-- 若目前不在 LINE LIFF 容器，或 LINE client 不支援 `shareTargetPicker()`，後台不會假裝已送出 Flex。
-- 系統會改為複製對應版本的 LIFF 連結，並提示使用者把連結貼到 LINE 中開啟後再分享。
-- 尚未發佈 snapshot 時，snapshot 相關按鈕會維持 disabled，不會誤導成有固定版可分享。
+1. 在編輯區修改內容。
+2. 按下「儲存正式名片」。
+3. 系統會自動：
+   - 儲存編輯中名片
+   - 建立新的正式版本
+   - 刷新最新正式版本資訊
+   - 顯示最新正式網頁連結
+   - 顯示最新正式 LIFF 連結
+4. 若要重用舊版內容，可從歷史版本按「載入到編輯區」。
+5. 載入到編輯區只會更新 working draft，不會直接改寫正式資料，直到再次按下「儲存正式名片」。
 
-## 為什麼舊版不會再被覆蓋
+## 一般網址、LIFF 連結、直接分享的差別
 
-- live 與 snapshot 是不同 slug rows。
-- snapshot row 的 `version.kind` 會標記為 `snapshot`。
-- GAS backend 會拒絕對 snapshot row 執行 `saveCard` 與 `uploadImage`，避免後續誤寫。
-
-## 目前資料來源
-
-- Sheet: `cards_runtime`
-- Columns: `slug | config_json | updated_at | updated_by`
-- live/default 與所有 snapshot 都放在同一張 sheet，不需要搬遷舊資料。
-
-## 未來擴充建議
-
-- 若要加「刪除版本 / 重新命名版本 / 標記版本備註」，優先從 [`gas/bound-card-backend/Code.gs`](/home/usersun/projects/line-liff-card/gas/bound-card-backend/Code.gs) 的 `listCards_` / `publishSnapshot_` 延伸。
-- 若要把版本列表做得更完整，前端入口在 [`src/components/AdminPage.tsx`](/home/usersun/projects/line-liff-card/src/components/AdminPage.tsx)。
-- 若要新增更多 permalink 規則或分享模式，維持 [`src/lib/share.ts`](/home/usersun/projects/line-liff-card/src/lib/share.ts) 以 slug 為核心，不要繞開既有 LIFF handoff 流程。
+- 複製最新正式網頁連結：取得固定網頁 permalink，任何瀏覽器都能開。
+- 複製最新正式 LIFF 連結：取得固定版本的 LIFF permanent link，適合貼回 LINE 對話內開啟。
+- 直接分享最新正式版本：在 LIFF 可用時直接送出最新版 Flex；若不在可分享環境，會退回複製該版本 LIFF 連結。
+- 歷史版本的三種操作完全相同，只是目標改成對應的舊版本。

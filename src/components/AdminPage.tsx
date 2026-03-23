@@ -54,6 +54,10 @@ import {
 } from '../lib/card-field-registry';
 import {
   buildFlexMessage,
+  createCardPermanentLinkForSlug,
+  getCanonicalLiffShareUrl,
+  getCardWebShareUrl,
+  shareFlexCardMessage,
 } from '../lib/share';
 import {
   buildCardHeroStyleTokens,
@@ -70,7 +74,7 @@ import {
   HERO_ASPECT_RATIO_OPTIONS,
 } from '../lib/card-style-registry';
 import { getPreviewAssetUrl } from '../lib/runtime';
-import { getCardWebUrl } from '../lib/routes';
+import { ensureLogin, initLiff, isInClient, isLoggedIn, isShareAvailable } from '../lib/liff';
 
 type FieldProps = {
   label: string;
@@ -732,10 +736,40 @@ export function AdminPage() {
       publishedAt: draft.version?.publishedAt ?? '',
     };
   }, [draft]);
-  const currentShareUrl = useMemo(() => getCardWebUrl(draft.slug), [draft.slug]);
-  const liveShareUrl = useMemo(() => getCardWebUrl('default'), []);
-  const currentSnapshotShareSlug = currentCardRecord.isLive ? lastPublishedSnapshot?.slug ?? '' : draft.slug;
-  const currentSnapshotShareUrl = currentSnapshotShareSlug ? getCardWebUrl(currentSnapshotShareSlug) : '';
+  const liveWebUrl = useMemo(() => getCardWebShareUrl('default'), []);
+  const canonicalLiveLiffUrl = useMemo(() => getCanonicalLiffShareUrl('default'), []);
+  const latestSnapshotRecord = useMemo(() => {
+    const snapshots = [...versionRecords.filter((record) => !record.isLive)];
+    if (lastPublishedSnapshot && !snapshots.some((record) => record.slug === lastPublishedSnapshot.slug)) {
+      snapshots.push(lastPublishedSnapshot);
+    }
+
+    return snapshots.sort((left, right) => {
+      const leftTime = Date.parse(left.publishedAt ?? left.updatedAt ?? '');
+      const rightTime = Date.parse(right.publishedAt ?? right.updatedAt ?? '');
+      if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+
+      return right.slug.localeCompare(left.slug);
+    })[0] ?? null;
+  }, [lastPublishedSnapshot, versionRecords]);
+  const activeSnapshotRecord = currentCardRecord.isLive
+    ? latestSnapshotRecord
+    : {
+        slug: currentCardRecord.slug,
+        isLive: false,
+        versionId: currentCardRecord.versionId,
+        publishedAt: currentCardRecord.publishedAt,
+      };
+  const snapshotShareSlug = activeSnapshotRecord?.slug ?? '';
+  const snapshotWebUrl = snapshotShareSlug ? getCardWebShareUrl(snapshotShareSlug) : '';
+  const canonicalSnapshotLiffUrl = snapshotShareSlug ? getCanonicalLiffShareUrl(snapshotShareSlug) : '';
+  const snapshotStatusCopy = currentCardRecord.isLive
+    ? snapshotShareSlug
+      ? `目前可分享的 snapshot：${snapshotShareSlug}`
+      : '目前尚未發佈 snapshot，因此不提供 snapshot 網址或 LIFF 分享。'
+    : `目前載入的是 snapshot：${snapshotShareSlug}`;
 
   useEffect(() => {
     applyBasicSeo(ADMIN_TITLE, ADMIN_DESCRIPTION);
@@ -859,9 +893,9 @@ export function AdminPage() {
     }
   };
 
-  const copyShareUrl = async (url: string, successMessage: string) => {
+  const copyText = async (value: string, successMessage: string) => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(value);
       setVersionStatus({
         tone: 'success',
         text: successMessage,
@@ -874,24 +908,91 @@ export function AdminPage() {
     }
   };
 
-  const shareLink = async (url: string, title: string, fallbackMessage: string) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title,
-          url,
-        });
-        setVersionStatus({
-          tone: 'success',
-          text: '已開啟分享視窗。',
-        });
-        return;
-      } catch {
-        // Fall through to copy when share sheet is unavailable or dismissed.
-      }
+  const resolveShareConfig = async (slug: string): Promise<CardConfig> => {
+    if (draft.slug === slug) {
+      return draft;
     }
 
-    await copyShareUrl(url, fallbackMessage);
+    return fetchRemoteCardConfig(slug, { baseUrl: apiBaseUrl });
+  };
+
+  const copyWebLink = async (slug: string, label: string) => {
+    await copyText(getCardWebShareUrl(slug), `已複製${label}網頁連結。`);
+  };
+
+  const copyLiffLink = async (slug: string, label: string) => {
+    try {
+      const permanentLink = await createCardPermanentLinkForSlug(slug);
+      await copyText(permanentLink, `已複製${label} LIFF permanent link。`);
+    } catch (error) {
+      const fallbackUrl = getCanonicalLiffShareUrl(slug);
+      const detail = error instanceof Error ? error.message : '目前無法建立 LIFF permanent link。';
+
+      if (fallbackUrl) {
+        await copyText(
+          fallbackUrl,
+          `目前無法建立${label} LIFF permanent link；已改為複製 LIFF 入口連結，請在 LINE 中開啟後再分享。`,
+        );
+        return;
+      }
+
+      setVersionStatus({
+        tone: 'error',
+        text: detail,
+      });
+    }
+  };
+
+  const shareFlexVersion = async (slug: string, label: string) => {
+    try {
+      const config = await resolveShareConfig(slug);
+      const pageUrl = getCardWebShareUrl(slug);
+      const initResult = await initLiff();
+
+      if (initResult.status !== 'ready') {
+        await copyLiffLink(slug, label);
+        setVersionStatus({
+          tone: 'info',
+          text: `${label}目前不在可直接分享的 LIFF 環境；已改為複製 LIFF 連結，請貼到 LINE 開啟後再送出 Flex。`,
+        });
+        return;
+      }
+
+      const [inClient, loggedIn, shareAvailable] = await Promise.all([
+        isInClient(),
+        isLoggedIn(),
+        isShareAvailable(),
+      ]);
+
+      if (inClient && !loggedIn) {
+        await ensureLogin();
+        setVersionStatus({
+          tone: 'info',
+          text: '目前在 LIFF 容器內，但尚未登入 LINE，已要求登入後再分享。',
+        });
+        return;
+      }
+
+      if (inClient && shareAvailable) {
+        const shared = await shareFlexCardMessage(config, pageUrl);
+        setVersionStatus({
+          tone: shared ? 'success' : 'info',
+          text: shared ? `已開啟 ${label} 的 LINE Flex 分享視窗。` : `已取消 ${label} 的 LINE Flex 分享。`,
+        });
+        return;
+      }
+
+      await copyLiffLink(slug, label);
+      setVersionStatus({
+        tone: 'info',
+        text: `${label}目前無法直接呼叫 shareTargetPicker；已複製 LIFF 連結，請在 LINE 中開啟後再傳送 Flex。`,
+      });
+    } catch (error) {
+      setVersionStatus({
+        tone: 'error',
+        text: error instanceof Error ? error.message : `目前無法分享${label}。`,
+      });
+    }
   };
 
   const buildLiveDraftForBaseline = (config: CardConfig): CardConfig =>
@@ -2079,30 +2180,57 @@ export function AdminPage() {
                 <p className="support-copy">{currentCardRecord.publishedAt ? `發佈時間：${currentCardRecord.publishedAt}` : '目前是 live/default。'}</p>
               </div>
               <div className="admin-info-card">
-                <p className="section-label">目前分享連結</p>
-                <p className="support-copy">{currentShareUrl}</p>
-                {lastPublishedSnapshot ? (
-                  <p className="support-copy">{`最近發佈 snapshot：${lastPublishedSnapshot.slug}`}</p>
-                ) : (
-                  <p className="support-copy">尚未在本分頁發佈新的 snapshot。</p>
-                )}
+                <p className="section-label">分享模式</p>
+                <p className="support-copy">一般網址用於網頁 permalink；LIFF 連結用於 LINE 內開啟；「分享最新 live / 分享此快照」會優先直接送出 Flex Message。</p>
+                <p className="support-copy">{snapshotStatusCopy}</p>
+                <p className="support-copy">{canonicalLiveLiffUrl ? `LIFF 入口：${canonicalLiveLiffUrl}` : '目前未設定 LIFF ID。'}</p>
               </div>
+            </div>
+            <div className="admin-info-card">
+              <p className="section-label">一般網址</p>
+              <p className="support-copy">{`live 網頁連結：${liveWebUrl}`}</p>
+              <p className="support-copy">{snapshotWebUrl ? `snapshot 網頁連結：${snapshotWebUrl}` : 'snapshot 網頁連結：尚未發佈 snapshot。'}</p>
+            </div>
+            <div className="admin-info-card">
+              <p className="section-label">LIFF 分享網址</p>
+              <p className="support-copy">下方按鈕會嘗試產生 LIFF permanent link；若當前環境不支援，會退回複製 LIFF 入口網址。</p>
+              <p className="support-copy">{`live LIFF 入口：${canonicalLiveLiffUrl || '未設定 LIFF ID'}`}</p>
+              <p className="support-copy">{canonicalSnapshotLiffUrl ? `snapshot LIFF 入口：${canonicalSnapshotLiffUrl}` : 'snapshot LIFF 入口：尚未發佈 snapshot。'}</p>
             </div>
             <div className="admin-inline-actions admin-inline-actions-3">
               <button type="button" className="action-button action-button-primary" onClick={() => void handlePublishSnapshot()} disabled={!currentCardRecord.isLive}>
                 發佈為新版本
               </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => void copyShareUrl(currentShareUrl, '已複製目前分享連結。')}>
-                複製目前分享連結
+              <button type="button" className="action-button action-button-secondary" onClick={() => void copyWebLink('default', 'live ')}>
+                複製 live 網頁連結
               </button>
-              <button type="button" className="action-button action-button-secondary" onClick={() => void shareLink(liveShareUrl, `${draft.content.fullName}｜live`, '已複製最新 live 連結。')}>
+              <button
+                type="button"
+                className="action-button action-button-secondary"
+                onClick={() => void copyWebLink(snapshotShareSlug, 'snapshot ')}
+                disabled={!snapshotShareSlug}
+              >
+                複製 snapshot 網頁連結
+              </button>
+              <button type="button" className="action-button action-button-secondary" onClick={() => void copyLiffLink('default', 'live ')}>
+                複製 live LIFF 連結
+              </button>
+              <button
+                type="button"
+                className="action-button action-button-secondary"
+                onClick={() => void copyLiffLink(snapshotShareSlug, 'snapshot ')}
+                disabled={!snapshotShareSlug}
+              >
+                複製 snapshot LIFF 連結
+              </button>
+              <button type="button" className="action-button action-button-secondary" onClick={() => void shareFlexVersion('default', 'live')}>
                 分享最新 live
               </button>
               <button
                 type="button"
                 className="action-button action-button-secondary"
-                onClick={() => void shareLink(currentSnapshotShareUrl, `${draft.content.fullName}｜snapshot`, '已複製 snapshot permalink。')}
-                disabled={!currentSnapshotShareUrl}
+                onClick={() => void shareFlexVersion(snapshotShareSlug, 'snapshot')}
+                disabled={!snapshotShareSlug}
               >
                 分享此快照
               </button>

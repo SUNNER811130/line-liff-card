@@ -1,7 +1,7 @@
 import type { CardConfig } from '../content/cards/types';
 import { createPermanentLink, shareCard } from './liff';
 import { navigateToUrl, resolveActionUrl, toAssetUrl } from './runtime';
-import { getCardLiffUrl } from './routes';
+import { getCardLiffUrl, getCardWebUrl } from './routes';
 import {
   buildFlexStyleTokens,
   FLEX_HERO_IMAGE_SIZE,
@@ -34,6 +34,9 @@ const createShareIntentId = (): string =>
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export const getCanonicalLiffShareUrl = (slug: string): string => getCardLiffUrl(slug);
+export const getCardWebShareUrl = (slug: string): string => getCardWebUrl(slug);
+export const createCardPermanentLinkForSlug = (slug: string): Promise<string> =>
+  createPermanentLink(getCardWebShareUrl(slug));
 
 const buildShareIntentUrl = (slug: string, source: string, intentId?: string): string => {
   const liffUrl = getCanonicalLiffShareUrl(slug);
@@ -54,6 +57,11 @@ const buildShareIntentUrl = (slug: string, source: string, intentId?: string): s
 
 export const buildFlexForwardShareUrl = (slug: string): string =>
   buildShareIntentUrl(slug, SHARE_SOURCE_FLEX_FORWARD);
+
+export async function shareFlexCardMessage(config: CardConfig, pageUrl: string): Promise<boolean> {
+  const permanentLink = await createPermanentLink(pageUrl);
+  return Boolean(await shareCard([buildFlexMessage(config, permanentLink, pageUrl)]));
+}
 
 const buildFlexFooterButtons = (config: CardConfig, pageUrl: string) => {
   const styleTokens = buildFlexStyleTokens(config);
@@ -333,8 +341,7 @@ export async function shareDigitalCard({
   shareAvailable,
 }: ShareDigitalCardInput): Promise<ShareResult> {
   if (inClient && shareAvailable) {
-    const permanentLink = await createPermanentLink(pageUrl);
-    const shared = await shareCard([buildFlexMessage(config, permanentLink, pageUrl)]);
+    const shared = await shareFlexCardMessage(config, pageUrl);
 
     return shared
       ? {

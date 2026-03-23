@@ -5,6 +5,47 @@ import { AdminPage } from '../components/AdminPage';
 import { cloneCardConfig, getAdminDraftStorageKey } from '../content/cards/draft';
 import { defaultCard } from '../content/cards/default';
 
+const {
+  createCardPermanentLinkForSlugMock,
+  shareFlexCardMessageMock,
+  initLiffMock,
+  isInClientMock,
+  isLoggedInMock,
+  isShareAvailableMock,
+  ensureLoginMock,
+  clipboardWriteTextMock,
+} = vi.hoisted(() => ({
+  createCardPermanentLinkForSlugMock: vi.fn(async (slug: string) => `https://liff.line.me/mock?slug=${encodeURIComponent(slug)}`),
+  shareFlexCardMessageMock: vi.fn(async () => true),
+  initLiffMock: vi.fn(async () => ({ status: 'ready' as const })),
+  isInClientMock: vi.fn(async () => true),
+  isLoggedInMock: vi.fn(async () => true),
+  isShareAvailableMock: vi.fn(async () => true),
+  ensureLoginMock: vi.fn(async () => false),
+  clipboardWriteTextMock: vi.fn(async () => undefined),
+}));
+
+vi.mock('../lib/share', async () => {
+  const actual = await vi.importActual<typeof import('../lib/share')>('../lib/share');
+  return {
+    ...actual,
+    createCardPermanentLinkForSlug: createCardPermanentLinkForSlugMock,
+    shareFlexCardMessage: shareFlexCardMessageMock,
+  };
+});
+
+vi.mock('../lib/liff', async () => {
+  const actual = await vi.importActual<typeof import('../lib/liff')>('../lib/liff');
+  return {
+    ...actual,
+    initLiff: initLiffMock,
+    isInClient: isInClientMock,
+    isLoggedIn: isLoggedInMock,
+    isShareAvailable: isShareAvailableMock,
+    ensureLogin: ensureLoginMock,
+  };
+});
+
 vi.mock('../lib/image-upload', () => ({
   prepareImageUpload: vi.fn(async (file: File) => ({
     fileName: file.name,
@@ -107,6 +148,25 @@ const buildFetchMock = (remoteConfig?: typeof defaultCard) =>
     }
 
     if (url.includes('action=getCard')) {
+      const requestedUrl = new URL(url);
+      const slug = requestedUrl.searchParams.get('slug') ?? 'default';
+      if (slug !== 'default') {
+        const snapshotConfig = cloneCardConfig(resolvedRemoteConfig);
+        snapshotConfig.slug = slug;
+        snapshotConfig.version = {
+          kind: 'snapshot',
+          versionId: '20260322T100000Z',
+          publishedAt: '2026-03-22T10:00:00.000Z',
+          liveSlug: 'default',
+          sourceSlug: 'default',
+        };
+        return createJsonResponse({
+          ok: true,
+          slug,
+          config: snapshotConfig,
+        });
+      }
+
       return createJsonResponse({
         ok: true,
         slug: 'default',
@@ -122,8 +182,25 @@ describe('AdminPage', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     vi.unstubAllEnvs();
+    vi.clearAllMocks();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.spyOn(window, 'open').mockImplementation(() => null);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: clipboardWriteTextMock,
+      },
+    });
+    createCardPermanentLinkForSlugMock.mockImplementation(
+      async (slug: string) => `https://liff.line.me/mock?slug=${encodeURIComponent(slug)}`,
+    );
+    shareFlexCardMessageMock.mockResolvedValue(true);
+    initLiffMock.mockResolvedValue({ status: 'ready' });
+    isInClientMock.mockResolvedValue(true);
+    isLoggedInMock.mockResolvedValue(true);
+    isShareAvailableMock.mockResolvedValue(true);
+    ensureLoginMock.mockResolvedValue(false);
+    clipboardWriteTextMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -497,7 +574,131 @@ describe('AdminPage', () => {
       const publishCall = fetchMock.mock.calls.find(([, init]) => String(init?.body || '').includes('"action":"publishSnapshot"'));
       expect(String(publishCall?.[1]?.body || '')).toContain('"slug":"default"');
       expect(screen.getByText('目前 live/default 已同步儲存，並成功發佈一份不可變更的 snapshot。')).toBeInTheDocument();
-      expect(screen.getByText('最近發佈 snapshot：default-v-20260322t100000z')).toBeInTheDocument();
+      expect(screen.getByText('目前可分享的 snapshot：default-v-20260322t100000z')).toBeInTheDocument();
+    });
+  });
+
+  it('separates web links and LIFF links, and keeps snapshot actions disabled before publish', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('一般網址')).toBeInTheDocument();
+      expect(screen.getByText('LIFF 分享網址')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '複製 live 網頁連結' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '複製 snapshot 網頁連結' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '複製 live LIFF 連結' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '複製 snapshot LIFF 連結' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '分享此快照' })).toBeDisabled();
+      expect(screen.getByText('snapshot 網頁連結：尚未發佈 snapshot。')).toBeInTheDocument();
+    });
+  });
+
+  it('copies distinct live and snapshot web and LIFF links', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '發佈為新版本' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '複製 snapshot 網頁連結' })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: '複製 live 網頁連結' }));
+    await user.click(screen.getByRole('button', { name: '複製 snapshot 網頁連結' }));
+    await user.click(screen.getByRole('button', { name: '複製 live LIFF 連結' }));
+    await user.click(screen.getByRole('button', { name: '複製 snapshot LIFF 連結' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('已複製snapshot LIFF permanent link。')).toBeInTheDocument();
+    });
+
+    expect(createCardPermanentLinkForSlugMock).toHaveBeenCalledWith('default');
+    expect(createCardPermanentLinkForSlugMock).toHaveBeenCalledWith('default-v-20260322t100000z');
+  });
+
+  it('shares live and snapshot Flex with the matching version payloads', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubGlobal('fetch', buildFetchMock());
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '發佈為新版本' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '分享此快照' })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: '分享最新 live' }));
+    await user.click(screen.getByRole('button', { name: '分享此快照' }));
+
+    await waitFor(() => {
+      expect(shareFlexCardMessageMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(shareFlexCardMessageMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        slug: 'default',
+      }),
+      'http://localhost:3000/card/default/',
+    );
+    expect(shareFlexCardMessageMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        slug: 'default-v-20260322t100000z',
+        version: expect.objectContaining({
+          kind: 'snapshot',
+        }),
+      }),
+      'http://localhost:3000/card/default-v-20260322t100000z/',
+    );
+  });
+
+  it('falls back to copying a LIFF link when shareTargetPicker is unavailable', async () => {
+    vi.stubEnv('VITE_CARD_API_BASE_URL', 'https://example.test/card-api');
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubGlobal('fetch', buildFetchMock());
+    isInClientMock.mockResolvedValue(false);
+
+    render(<AdminPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('管理員解鎖密碼'), 'secret-123');
+    await user.click(screen.getByRole('button', { name: '管理員解鎖' }));
+    await waitFor(() => {
+      expect(screen.getByText('已載入 slug「default」的正式資料。')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '分享最新 live' }));
+
+    await waitFor(() => {
+      expect(createCardPermanentLinkForSlugMock).toHaveBeenCalledWith('default');
+      expect(shareFlexCardMessageMock).not.toHaveBeenCalled();
+      expect(screen.getByText(/請在 LINE 中開啟後再傳送 Flex/)).toBeInTheDocument();
     });
   });
 

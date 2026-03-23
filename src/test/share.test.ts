@@ -47,6 +47,25 @@ describe('share helpers', () => {
     );
   });
 
+  it('builds distinct web urls for live and snapshot versions', async () => {
+    const { getCardWebShareUrl } = await import('../lib/share');
+
+    expect(getCardWebShareUrl('default')).toBe('http://localhost:3000/card/default/');
+    expect(getCardWebShareUrl('default-v-20260322t100000z')).toBe(
+      'http://localhost:3000/card/default-v-20260322t100000z/',
+    );
+  });
+
+  it('builds distinct LIFF entry urls for live and snapshot versions', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    const { getCanonicalLiffShareUrl } = await import('../lib/share');
+
+    expect(getCanonicalLiffShareUrl('default')).toBe('https://liff.line.me/test-liff-id/card/default/');
+    expect(getCanonicalLiffShareUrl('default-v-20260322t100000z')).toBe(
+      'https://liff.line.me/test-liff-id/card/default-v-20260322t100000z/',
+    );
+  });
+
   it('keeps the page share handoff on the canonical LIFF route with a one-time intent id', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     const { buildLiffShareIntentUrl } = await import('../lib/share');

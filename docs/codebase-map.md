@@ -7,13 +7,13 @@
 - `src/components/CardPage.tsx`
   前台 `/card/default/` 與 admin preview 的實際渲染頁。負責 LIFF 初始化、分享按鈕、QR code 與畫面輸出。
 - `src/components/AdminPage.tsx`
-  正式 CMS。負責 unlock、讀取正式 runtime config、編輯本地 draft、save、upload、preview。
+  正式 CMS。負責 unlock、讀取正式 runtime config、編輯本地 draft、save、upload、preview，以及 live/snapshot 的 web permalink、LIFF permanent link 與 admin 端 Flex 分享入口。
 - `src/lib/card-source.ts`
   前後台共用的 runtime data adapter。封裝 `getCard`、`listCards`、`saveCard`、`publishSnapshot`、`createAdminSession`、`verifyAdminSession`、`uploadImage` 與 bundled fallback。
 - `src/lib/card-admin-api.ts`
   Apps Script Web App request/response envelope helper。這裡是 contract 的最小邊界。
 - `src/lib/share.ts`
-  LINE Flex payload 組裝、share intent URL、LIFF/web fallback share 流程；snapshot permalink 也沿用同一套 slug-based share。
+  LINE Flex payload 組裝、share intent URL、LIFF/web fallback share 流程；snapshot permalink 與 admin 端 live/snapshot web/LIFF 雙軌連結也沿用同一套 slug-based share。
 - `src/lib/liff.ts`
   LIFF SDK 初始化、endpoint 驗證、login、permanent link、shareTargetPicker。
 - `src/lib/runtime.ts`
@@ -86,6 +86,21 @@
 3. GAS 把圖片存到 Drive folder，回傳 `publicUrl/viewUrl/downloadUrl/fileId`。
 4. 前端只把 `publicUrl` 回寫到 `photo.src` 或 `seo.ogImage` 草稿欄位。
 
+## 3.1 `admin/` 版本操作與分享流程
+
+1. `AdminPage` 版本操作區固定把分享拆成三類：
+   - 一般網址：`/card/<slug>/`
+   - LIFF 分享網址：以同一個 `/card/<slug>/` 為 target 建立 LIFF permanent link
+   - 直接 Flex 分享：在 LIFF client 內呼叫 `shareTargetPicker`
+2. live 永遠使用 `slug=default`。
+3. snapshot 永遠使用 immutable snapshot slug，例如 `default-v-20260322t100000z`。
+4. 若目前停留在 live/default：
+   - snapshot 按鈕只會指向最新已知 snapshot
+   - 尚未有 snapshot 時，snapshot 按鈕保持 disabled
+5. 若直接 Flex 分享時不在 LIFF 或 `shareTargetPicker` 不可用：
+   - admin 會退回複製對應版本的 LIFF 連結
+   - 並提示使用者將該連結貼到 LINE 中開啟後再傳送
+
 ## 4. LINE 分享 Flex 資料來源與組裝流程
 
 來源檔案：`src/lib/share.ts`
@@ -115,14 +130,19 @@
 
 1. `CardPage.handleShare()` 呼叫 `shareDigitalCard()`
 2. 若在 LINE client 且 `shareTargetPicker` 可用：
-   - `createPermanentLink(pageUrl)`
-   - `shareCard([buildFlexMessage(...)])`
+  - `createPermanentLink(pageUrl)`
+  - `shareCard([buildFlexMessage(...)])`
 3. 若在 LINE client 但不能直接 share：
    - 轉到 `buildLiffShareIntentUrl(config.slug)`，進入 handoff flow
 4. 若不在 LINE client：
-   - 先試 `navigator.share`
-   - 再 fallback 到 LINE 文字分享 URL
-   - 最後 fallback 到 copy link
+  - 先試 `navigator.share`
+  - 再 fallback 到 LINE 文字分享 URL
+  - 最後 fallback 到 copy link
+
+admin 版分享則只做兩件事：
+
+1. 先分清楚要拿 web permalink、LIFF permanent link，還是直接送 Flex。
+2. 若不能直接 shareTargetPicker，就只退回複製 LIFF 連結，不再混回一般 web permalink。
 
 ## 5. runtime config 主要欄位如何流向 UI / share
 

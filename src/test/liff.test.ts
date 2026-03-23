@@ -109,6 +109,21 @@ describe('liff helpers', () => {
     );
   });
 
+  it('creates a permanent link for a snapshot page under the same endpoint', async () => {
+    vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
+    vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
+
+    const { __resetLiffForTests, createPermanentLink } = await import('../lib/liff');
+    __resetLiffForTests();
+
+    await expect(
+      createPermanentLink(`${window.location.origin}/line-liff-card/card/default-v-20260322t100000z/`),
+    ).resolves.toContain('https://liff.line.me/mock');
+    expect(liffCoreMock.permanentLink.createUrlBy).toHaveBeenCalledWith(
+      `${window.location.origin}/line-liff-card/card/default-v-20260322t100000z/`,
+    );
+  });
+
   it('falls back to LIFF entry url when permanent link creation fails', async () => {
     vi.stubEnv('VITE_LIFF_ID', 'test-liff-id');
     vi.stubEnv('VITE_SITE_URL', `${window.location.origin}/line-liff-card/`);
